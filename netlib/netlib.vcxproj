@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{a67687f7-76e9-4bf7-9ee2-13717b3d20c6}</ProjectGuid>
-    <RootNamespace>VideoLib</RootNamespace>
+    <ProjectGuid>{ab87ed5d-49bd-43fa-aa18-b9553cdc37f7}</ProjectGuid>
+    <RootNamespace>netlib</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -109,6 +109,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>Ws2_32.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -128,16 +129,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="audio.cpp" />
+    <ClCompile Include="common.cpp" />
+    <ClCompile Include="dns.cpp" />
+    <ClCompile Include="ice.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="network.cpp" />
-    <ClCompile Include="video.cpp" />
+    <ClCompile Include="stun.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="audio.h" />
-    <ClInclude Include="custom_types.h" />
-    <ClInclude Include="network.h" />
-    <ClInclude Include="video.h" />
+    <ClInclude Include="common.h" />
+    <ClInclude Include="stun.h" />
+    <ClInclude Include="netlib.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

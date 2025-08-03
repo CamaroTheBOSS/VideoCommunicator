@@ -1,5 +1,5 @@
 ﻿#include <iostream>
-
+#define WIN32_LEAN_AND_MEAN
 #include "mfmediaengine.h"
 #include "mfapi.h"
 #include "mfreadwrite.h"
@@ -9,12 +9,14 @@
 #include <Dbt.h>
 #include "video.h"
 #include "audio.h"
+#include "network.h"
 
 #pragma comment (lib, "ole32.lib")
 #pragma comment (lib, "mf.lib")
 #pragma comment (lib, "mfplat.lib")
 #pragma comment (lib, "mfuuid.lib")
 #pragma comment (lib, "mfreadwrite.lib")
+#pragma comment (lib, "Ws2_32.lib")
 
 #include <locale>
 #include <locale.h>
@@ -49,6 +51,29 @@ static void initLocale(void) {
 
 int main()
 {
+    WSADATA wsaData;
+    WORD mVersionRequested = MAKEWORD(2, 2);
+    int wsaError = WSAStartup(mVersionRequested, &wsaData);
+    if (wsaError) {
+        std::cout << wsaError << " Error on WSA stratup\n";
+        WSACleanup();
+        return -1;
+    }
+
+    net::ConnectionSettings settings{
+        .ip = "127.0.0.1",
+        .port = 8888
+    };
+    net::UDPConnection connection{ settings };
+    
+
+
+
+
+
+
+
+
     initLocale();
     success(CoInitialize(nullptr));
 
@@ -97,6 +122,7 @@ int main()
     auto format = video::getMediaFormat(currentType);
     success(aggregateReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_AUDIO_STREAM, nullptr, mediaType.get()));
 
+    connection.connectServer();
     // AGGREGATE CAPTURE LOOP
     success(sinkWriter->BeginWriting());
     while (true) {
@@ -110,6 +136,16 @@ int main()
         );*/
         //video::writeToBitmap(rgb24, frameSize);
         success(sinkWriter->WriteSample(0, audioSample.sample.get()));
+
+        auto buffer = video::getContignousBuffer(audioSample.sample);
+        video::runOnBufferData(buffer, [&](BYTE* data, DWORD size) {
+            connection.sendData(data, size);
+        });;
+
+        buffer = video::getContignousBuffer(videoSample.sample);
+        video::runOnBufferData(buffer, [&](BYTE* data, DWORD size) {
+            connection.sendData(data, size);
+            });;
     }
     success(sinkWriter->Finalize());
     success(audioSink->Shutdown());
@@ -166,5 +202,5 @@ int main()
         }
     );
     video::writeToBitmap(rgb24, frameSize);*/
-
+    WSACleanup();
 }
