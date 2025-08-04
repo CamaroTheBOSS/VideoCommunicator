@@ -6,7 +6,7 @@
 
 namespace net {
 	// STUN Protocol (Session Traversal Utilities for NAT)
-	enum class StunAttributeType {
+	enum class StunAttributeType : uint16_t {
 		// Standard (comprehension-required)
 		MAPPED_ADDRESS = 0x0001,
 		USERNAME = 0x0006,
@@ -43,16 +43,16 @@ namespace net {
 		ICE_CONTROLLING = 0x802A,
 	};
 
-	enum class StunClass {
+	enum class StunClass : uint8_t {
 		REQUEST = 0,
 		INDICATION = 1,
 		SUCCESS_RESPONSE = 2,
 		FAILURE_RESPONSE = 3,
 	};
 
-	enum class StunMethod {
-		BINDING = 1,
-		DEPR_SHARED_SECRET = 2,
+	enum class StunMethod : uint8_t {
+		BINDING				= 1,
+		DEPR_SHARED_SECRET	= 2,
 	};
 
 	struct StunAttribute {
@@ -76,7 +76,7 @@ namespace net {
 		IPv6 = 2
 	};
 
-	struct SocketAdress {
+	struct SocketAddress {
 		std::string ip;
 		uint16_t port;
 		SocketFamily family;
@@ -91,7 +91,8 @@ namespace net {
 	void				stun_set_transaction_id_rand(StunMessage& msg);
 
 	//void				stun_add_attr(StunMessage& msg, const StunAttributeType& key, uint32_t value);
-	void				stun_add_attr_mapped_address(StunMessage& msg, const SocketAdress& address);
+	void				stun_add_attr_mapped_address(StunMessage& msg, const SocketAddress& address);
+	void				stun_add_attr_xor_mapped_address(StunMessage& msg, const SocketAddress& address);
 	//void				stun_add_attr_username(StunMessage& msg, const std::string& username);
 	//void				stun_add_attr_message_integrity(StunMessage& msg, const std::span<uint8_t, 20>& msg_integrity);
 	/*void				stun_add_attr_error_code();
@@ -100,7 +101,6 @@ namespace net {
 	//void				stun_add_attr_message_integrity_sha256(StunMessage& msg);
 	//void				stun_add_attr_password_algorithm();
 	//void				stun_add_attr_user_hash(StunMessage& msg, const std::span<uint8_t, 30>& hash);
-	//void				stun_add_attr_xor_mapped_address(StunMessage& msg, const std::string& address, uint16_t port);
 	//void				stun_add_attr_password_algorithms();
 	//void				stun_add_attr_alternate_domain();
 	//void				stun_add_attr_software();
@@ -117,9 +117,10 @@ namespace net {
 	//void				stun_add_attr_ice_controlling();
 
 	uint16_t			stun_serialize_message(const StunMessage& msg, uint8_t* dst);
-	StunMessage			stun_deserialize_message(uint8_t* src);
-	/*void				stun_deserialize_attr_mapped_address(const StunAttribute& attribute);
-	void				stun_deserialize_attr_username();
+	StunMessage			stun_deserialize_message(const uint8_t* src);
+	SocketAddress		stun_deserialize_attr_mapped_address(const StunAttribute& attribute);
+	SocketAddress		stun_deserialize_attr_xor_mapped_address(const StunAttribute& attribute);
+	/*void				stun_deserialize_attr_username();
 	void				stun_deserialize_attr_message_integrity();
 	void				stun_deserialize_attr_error_code();
 	void				stun_deserialize_attr_unknown_attributes();
@@ -127,7 +128,7 @@ namespace net {
 	void				stun_deserialize_attr_message_integrity_sha256();
 	void				stun_deserialize_attr_password_algorithm();
 	void				stun_deserialize_attr_user_hash();
-	void				stun_deserialize_attr_xor_mapped_address();
+
 	void				stun_deserialize_attr_password_algorithms();
 	void				stun_deserialize_attr_alternate_domain();
 	void				stun_deserialize_attr_software();
@@ -145,4 +146,6 @@ namespace net {
 
 	bool				stun_send_udp_unicast();
 	bool				stun_recv_udp_unicast();
+
+	std::string ipv4_net_to_str(const uint8_t* src);
 }

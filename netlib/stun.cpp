@@ -22,7 +22,7 @@ namespace net {
 		uint16_t value = msg.type & STUN_M3_0;
 		value += (msg.type & STUN_M6_4) >> 1;
 		value += (msg.type & STUN_M11_7) >> 2;
-		assert(value == 1);
+		assert(value > 0 && value <= 2);
 		return static_cast<StunMethod>(value);
 	}
 
@@ -56,7 +56,7 @@ namespace net {
 		// Class hidden in msg.type: [M11, M10, M9, M8, M7, C1, M6, M5, M4, C0, M3, M2, M1, M0]
 		// where M is method and C is class
 		uint8_t new_class = static_cast<uint8_t>(msg_class);
-		uint16_t new_type = new_class & 0b1 << 4;
+		uint16_t new_type = (new_class & 0b1) << 4;
 		new_type += (new_class & 0b10) << 7;
 		msg.type = (msg.type & STUN_M_MASK) | (new_type & ~STUN_M_MASK);
 	}
@@ -68,7 +68,7 @@ namespace net {
 		}
 	}
 
-	void stun_add_attr_mapped_address(StunMessage& msg, const SocketAdress& address) {
+	void stun_add_attr_mapped_address(StunMessage& msg, const SocketAddress& address) {
 		StunAttribute attribute{};
 		attribute.type = static_cast<uint16_t>(StunAttributeType::MAPPED_ADDRESS);
 		attribute.length = 4 + ((address.family == SocketFamily::IPv4) ? 4 : 16);
@@ -76,8 +76,39 @@ namespace net {
 		uint8_t* data = attribute.data.data();
 		data[0] = static_cast<uint8_t>(0);
 		data[1] = static_cast<uint8_t>(address.family);
-		data[2] = address.port;
-		inet_pton(AF_INET, address.ip.c_str(), reinterpret_cast<void*>(data[4])); // SYSCALL
+		std::memcpy(data + 2, &address.port, 2);
+		inet_pton((address.family == SocketFamily::IPv4) ? AF_INET : AF_INET6, address.ip.c_str(), reinterpret_cast<void*>(data + 4)); // SYSCALL
+		msg.attributes.emplace_back(std::move(attribute));
+	}
+
+	void stun_add_attr_xor_mapped_address(StunMessage& msg, const SocketAddress& address) {
+		StunAttribute attribute{};
+		attribute.type = static_cast<uint16_t>(StunAttributeType::XOR_MAPPED_ADDRESS);
+		attribute.length = 4 + ((address.family == SocketFamily::IPv4) ? 4 : 16);
+		attribute.data = std::vector<uint8_t>(attribute.length);
+		uint8_t* data = attribute.data.data();
+		data[0] = static_cast<uint8_t>(0);
+		data[1] = static_cast<uint8_t>(address.family);
+		// Specification: X-Port is a XOR of port with magic cookie
+		uint16_t port = address.port ^ (msg.magic_cookie >> 16);
+		std::memcpy(data + 2, &port, 2);
+		if (address.family == SocketFamily::IPv4) {
+			// Specification: If IPv4 make XOR with magic cookie
+			uint32_t ip = 1;
+			inet_pton(AF_INET, address.ip.c_str(), reinterpret_cast<void*>(&ip)); // SYSCALL
+			ip ^= htonl(msg.magic_cookie);
+			std::memcpy(data + 4, &ip, 4);
+		}
+		else {
+			// Specification: If IPv6 make XOR with concatenation of magic cookie and transcation id
+			uint32_t ip[4];
+			inet_pton(AF_INET6, address.ip.c_str(), reinterpret_cast<void*>(ip)); // SYSCALL
+			ip[0] ^= htonl(msg.magic_cookie);
+			ip[1] ^= htonl(msg.transaction_id[0]);
+			ip[2] ^= htonl(msg.transaction_id[1]);
+			ip[3] ^= htonl(msg.transaction_id[2]);
+			std::memcpy(data + 4, &ip, 16);
+		}
 		msg.attributes.emplace_back(std::move(attribute));
 	}
 
@@ -102,7 +133,27 @@ namespace net {
 		return offset;
 	}
 
-	StunMessage stun_deserialize_message(uint8_t* src) {
+	SocketAddress stun_deserialize_attr_mapped_address(const StunAttribute& attribute) {
+		SocketAddress address{};
+		const uint8_t* data = attribute.data.data();
+		address.family = static_cast<SocketFamily>(data[1]);
+		std::memcpy(&address.port, data + 2, 2);
+		address.port = htons(address.port);
+		address.ip = ipv4_net_to_str(data + 4);
+		return address;
+	}
+
+	SocketAddress stun_deserialize_attr_xor_mapped_address(const StunAttribute& attribute) {
+		SocketAddress address{};
+		const uint8_t* data = attribute.data.data();
+		address.family = static_cast<SocketFamily>(data[1]);
+		std::memcpy(&address.port, data + 2, 2);
+		address.port = htons(address.port);
+		address.ip = ipv4_net_to_str(data + 4);
+		return address;
+	}
+
+	StunMessage stun_deserialize_message(const uint8_t* src) {
 		StunMessage msg{};
 		std::memcpy(&msg.type, src, 2);
 		std::memcpy(&msg.length, src + 2, 2);
@@ -135,5 +186,26 @@ namespace net {
 
 	bool stun_recv_udp_unicast() {
 		return false;
+	}
+
+	std::string ipv4_net_to_str(const uint8_t* src) {
+		std::string ret;
+		ret.reserve(128);
+		for (uint8_t i = 0; i < 4; i++) {
+			uint8_t value = src[i];
+			uint8_t hundreds = value / 100;
+			uint8_t tens = (value - 100 * hundreds) / 10;
+			uint8_t units = value - 100 * hundreds - 10 * tens;
+			if (hundreds) {
+				ret += '0' + hundreds;
+			}
+			if (tens) {
+				ret += '0' + tens;
+			}
+			ret += '0' + units;
+			ret += '.';
+		}
+		ret.erase(ret.size() - 1);
+		return ret;
 	}
 }

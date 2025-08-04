@@ -144,6 +144,7 @@ namespace net {
 					);
 					continue;
 				}
+				SocketAddress addr;
 				for (uint8_t i = 0; i < recv_msg.attributes.size(); i++) {
 					StunAttributeType attribute_type = stun_get_msg_attr_type(recv_msg, i);
 					switch (attribute_type) {
@@ -154,10 +155,11 @@ namespace net {
 						log_info(std::format("Got ERROR_CODE attribute: {}", 0));
 						continue;
 					case StunAttributeType::MAPPED_ADDRESS:
-						log_info(std::format("Got MAPPED_ADDRESS attribute: {}", 0));
-
+						addr = stun_deserialize_attr_mapped_address(recv_msg.attributes[i]);
+						log_info(std::format("Got MAPPED_ADDRESS attribute: ip: {} port: {}", addr.ip, addr.port));
 						continue;
 					case StunAttributeType::XOR_MAPPED_ADDRESS:
+						addr = stun_deserialize_attr_xor_mapped_address(recv_msg.attributes[i]);
 						log_info(std::format("Got XOR_MAPPED_ADDRESS attribute: {}", 0));
 						continue;
 					case StunAttributeType::MESSAGE_INTEGRITY:
