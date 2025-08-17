@@ -56,94 +56,48 @@ export namespace net {
 		BINDING = 1,
 		DEPR_SHARED_SECRET = 2,
 	};
+	
+	class StunAttribute {
+		friend class Stun;
+	public:
+		StunAttributeType get_type() const { return static_cast<StunAttributeType>(type); }
+		uint16_t get_type_raw() const { return static_cast<uint16_t>(type); }
 
-	struct StunAttribute {
-		uint16_t type = 0;			// 16 bits attribute type
+		Ipv4Address parse_mapped_address() const;
+		Ipv4Address parse_xor_mapped_address() const;
+		std::string parse_string() const;
+	private:
+		uint16_t type;				// 16 bits attribute type
 		uint16_t length = 0;		// 16 bits data length in bytes
 		std::vector<uint8_t> data;	// attribute data
 		uint16_t padding = 0;		// attribute starts on 32 bit word boundaries
 	};
 
-	struct StunMessage {
-		// Header
+	class Stun {
+	public:
+		StunClass cls() const { return cls_type; };
+		StunMethod method() const { return method_type; };
+		void clear_transaction_id() { std::memset(&transaction_id, 0, transaction_id.size()); }
+		void set_type(const StunClass new_cls, const StunMethod new_method);
+		void set_type(const uint16_t new_type);
+		const std::vector<StunAttribute>& get_attributes() const { return attributes; }
+
+		void add_attr_mapped_address(const Ipv4Address& address);
+		void add_attr_xor_mapped_address(const Ipv4Address& address);
+		void add_attr_string(const StunAttributeType type, const std::string& value);
+		bool remove_attr(const StunAttributeType type);
+
+		size_t write_into(std::span<uint8_t> dst);
+		static Stun read_from(const std::span<uint8_t> src);
+	private:
+		// Physical part of Stun packet
 		uint16_t type = 0;								 // 2 bits of zeros, 2 bits of class and 12 bits of method
 		uint16_t length = 0;							 // defines byte size of the StunMessage without 20 byte HEADER
-		static const uint32_t magic_cookie = 0x2112A442; //42A41221
-		uint32_t transaction_id[3] = { 0, 0, 0 };		 // random
+		std::array<uint8_t, 12> transaction_id;
 		std::vector<StunAttribute> attributes;
+
+		// Logical helper members
+		StunClass cls_type;
+		StunMethod method_type;
 	};
-
-	enum class SocketFamily : uint8_t {
-		IPv4 = 1,
-		IPv6 = 2
-	};
-
-	struct SocketAddress {
-		std::string ip;
-		uint16_t port;
-		SocketFamily family;
-	};
-
-	StunMethod			stun_get_msg_method(const StunMessage& msg);
-	StunClass			stun_get_msg_class(const StunMessage& msg);
-	StunAttributeType	stun_get_msg_attr_type(const StunMessage& msg, const uint8_t index);
-
-	void				stun_set_msg_method(StunMessage& msg, const StunMethod method);
-	void				stun_set_msg_class(StunMessage& msg, const StunClass msg_class);
-	void				stun_set_transaction_id_rand(StunMessage& msg);
-
-	//void				stun_add_attr(StunMessage& msg, const StunAttributeType& key, uint32_t value);
-	void				stun_add_attr_mapped_address(StunMessage& msg, const SocketAddress& address);
-	void				stun_add_attr_xor_mapped_address(StunMessage& msg, const SocketAddress& address);
-	//void				stun_add_attr_username(StunMessage& msg, const std::string& username);
-	//void				stun_add_attr_message_integrity(StunMessage& msg, const std::span<uint8_t, 20>& msg_integrity);
-	/*void				stun_add_attr_error_code();
-	void				stun_add_attr_unknown_attributes();
-	void				stun_add_attr_nonce();*/
-	//void				stun_add_attr_message_integrity_sha256(StunMessage& msg);
-	//void				stun_add_attr_password_algorithm();
-	//void				stun_add_attr_user_hash(StunMessage& msg, const std::span<uint8_t, 30>& hash);
-	//void				stun_add_attr_password_algorithms();
-	//void				stun_add_attr_alternate_domain();
-	//void				stun_add_attr_software();
-	//void				stun_add_attr_alternate_server();
-	//void				stun_add_attr_fingerprint(); // LAST ATTRIBUTE
-	//void				stun_add_attr_depr_response_address();
-	//void				stun_add_attr_depr_change_request();
-	//void				stun_add_attr_depr_source_address();
-	//void				stun_add_attr_depr_password();
-	//void				stun_add_attr_depr_reflected_from();
-	//void				stun_add_attr_ice_priority();
-	//void				stun_add_attr_ice_use_candidate();
-	//void				stun_add_attr_ice_controlled();
-	//void				stun_add_attr_ice_controlling();
-
-	uint16_t			stun_serialize_message(const StunMessage& msg, uint8_t* dst);
-	StunMessage			stun_deserialize_message(const uint8_t* src);
-	Ipv4Address			stun_deserialize_attr_mapped_address(const StunAttribute& attribute);
-	Ipv4Address			stun_deserialize_attr_xor_mapped_address(const StunAttribute& attribute, const uint32_t transaction_id[3]);
-	std::string			stun_deserialize_attr_software(const StunAttribute& attribute);
-	/*void				stun_deserialize_attr_username();
-	void				stun_deserialize_attr_message_integrity();
-	void				stun_deserialize_attr_error_code();
-	void				stun_deserialize_attr_unknown_attributes();
-	void				stun_deserialize_attr_nonce();
-	void				stun_deserialize_attr_message_integrity_sha256();
-	void				stun_deserialize_attr_password_algorithm();
-	void				stun_deserialize_attr_user_hash();
-
-	void				stun_deserialize_attr_password_algorithms();
-	void				stun_deserialize_attr_alternate_domain();
-
-	void				stun_deserialize_attr_alternate_server();
-	void				stun_deserialize_attr_fingerprint();
-	void				stun_deserialize_attr_depr_response_address();
-	void				stun_deserialize_attr_depr_change_request();
-	void				stun_deserialize_attr_depr_source_address();
-	void				stun_deserialize_attr_depr_password();
-	void				stun_deserialize_attr_depr_reflected_from();
-	void				stun_deserialize_attr_ice_priority();
-	void				stun_deserialize_attr_ice_use_candidate();
-	void				stun_deserialize_attr_ice_controlled();
-	void				stun_deserialize_attr_ice_controlling();*/
 }

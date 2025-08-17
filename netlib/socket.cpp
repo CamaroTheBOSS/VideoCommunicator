@@ -48,7 +48,13 @@ namespace net {
 	}
 
 	std::string udp_ipv4_net_to_str(const uint32_t ip_net) {
-		return "";
+		sockaddr_in address{};
+		address.sin_family = AF_INET;
+		address.sin_addr.s_addr = htonl(ip_net);
+		address.sin_port = 0;
+		char ip[16];
+		inet_ntop(AF_INET, &address.sin_addr, ip, 16);
+		return std::string(ip);
 	}
 
 	int udp_ipv4_send_packet(const Socket socket, const void* data, const size_t size, const Ipv4Address& address) {
@@ -56,7 +62,7 @@ namespace net {
 		addr.sin_family = AF_INET;
 		addr.sin_port = htons(address.port);
 		addr.sin_addr.s_addr = htonl(address.ip);
-		auto send_bytes = sendto(socket, reinterpret_cast<const char*>(data), size, 0, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
+		auto send_bytes = sendto(socket, reinterpret_cast<const char*>(data), static_cast<int>(size), 0, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
 		if (send_bytes <= 0) {
 			log_wsa_error("Sending data to stun server failed.");
 		}
@@ -66,7 +72,7 @@ namespace net {
 	int udp_ipv4_recv_packet(const Socket socket, void* data, const size_t size, Ipv4Address* address) {
 		struct sockaddr_in recv_addr {};
 		int recv_addr_length = sizeof(recv_addr);
-		int recv_bytes = recvfrom(socket, reinterpret_cast<char*>(data), size, 0, reinterpret_cast<sockaddr*>(&recv_addr), &recv_addr_length);
+		int recv_bytes = recvfrom(socket, reinterpret_cast<char*>(data), static_cast<int>(size), 0, reinterpret_cast<sockaddr*>(&recv_addr), &recv_addr_length);
 		if (recv_bytes <= 0) {
 			log_wsa_error("Receiving bytes failed.");
 		}
@@ -77,7 +83,7 @@ namespace net {
 		return recv_bytes;
 	}
 
-	int udp_ipv4_recv_packet_block(const Socket socket, void* data, const size_t size, Ipv4Address* address, const uint64_t timeout_us) {
+	int udp_ipv4_recv_packet_block(const Socket socket, void* data, const size_t size, Ipv4Address* address, const uint32_t timeout_us) {
 		FD_SET set{};
 		FD_SET(socket, &set);
 		timeval timeout{};

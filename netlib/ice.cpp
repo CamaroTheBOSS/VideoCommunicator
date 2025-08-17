@@ -54,11 +54,10 @@ namespace net {
 		};
 		std::vector<Ipv4Address> candidates;
 
-		StunMessage request{};
-		stun_set_msg_class(request, StunClass::REQUEST);
-		stun_set_msg_method(request, StunMethod::BINDING);
-		uint8_t buffer[92]{};
-
+		Stun request{};
+		request.set_type(StunClass::REQUEST, StunMethod::BINDING);
+		std::array<uint8_t, 92> buffer{};
+		auto spn = std::span<uint8_t>(buffer);
 		Ipv4Address address{};
 		address.port = 3478;
 
@@ -70,10 +69,10 @@ namespace net {
 			}
 			for (const auto& ip : ips) {
 				auto connection = udp_ipv4_init_socket();
-				stun_set_transaction_id_rand(request);
-				auto size = stun_serialize_message(request, buffer);
+				request.clear_transaction_id();
+				auto size = request.write_into(spn);
 				address.ip = udp_ipv4_str_to_net(ip);
-				auto send_bytes = udp_ipv4_send_packet(connection, reinterpret_cast<void*>(buffer), size, address);
+				auto send_bytes = udp_ipv4_send_packet(connection, reinterpret_cast<void*>(&buffer), size, address);
 				if (send_bytes <= 0) {
 					closesocket(connection);
 					continue;
@@ -96,7 +95,7 @@ namespace net {
 				break;
 			}
 			for (int i = 0; i < socket_count; i++) {
-				SOCKET connection = connections.fd_array[i];
+				Socket connection = connections.fd_array[i];
 				std::vector<uint8_t> buff_vec(92);
 				Ipv4Address recv_server_address{};
 				auto recv_bytes = udp_ipv4_recv_packet(connection, buff_vec.data(), buff_vec.size(), &recv_server_address);
@@ -105,9 +104,10 @@ namespace net {
 					FD_CLR(connection, &connections);
 					continue;
 				}
-				auto recv_msg = stun_deserialize_message(buff_vec.data());
-				auto msg_class = stun_get_msg_class(recv_msg);
-				auto msg_method = stun_get_msg_method(recv_msg);
+
+				auto recv_msg = Stun::read_from(std::span<uint8_t>(buff_vec.data(), recv_bytes));
+				auto msg_class = recv_msg.cls();
+				auto msg_method = recv_msg.method();
 				auto ip_str = udp_ipv4_net_to_str(recv_server_address.ip);
 				if (msg_method == StunMethod::BINDING && msg_class == StunClass::SUCCESS_RESPONSE) {
 					log_info(std::format("Successful stun request to ip '{}'", ip_str));
@@ -120,9 +120,9 @@ namespace net {
 					continue;
 				}
 				Ipv4Address addr;
-				for (uint8_t i = 0; i < recv_msg.attributes.size(); i++) {
-					StunAttributeType attribute_type = stun_get_msg_attr_type(recv_msg, i);
-					switch (attribute_type) {
+				for (const auto& attribute : recv_msg.get_attributes()) {
+					auto type = attribute.get_type();
+					switch (type) {
 					case StunAttributeType::ALTERNATE_SERVER:
 						log_info(std::format("Got ALTERNATE_SERVER attribute: {}", 0));
 						continue;
@@ -130,13 +130,13 @@ namespace net {
 						log_info(std::format("Got ERROR_CODE attribute: {}", 0));
 						continue;
 					case StunAttributeType::MAPPED_ADDRESS:
-						addr = stun_deserialize_attr_mapped_address(recv_msg.attributes[i]);
-						log_info(std::format("Got MAPPED_ADDRESS attribute: ip: {} port: {}", addr.ip, addr.port));
+						addr = attribute.parse_mapped_address();
+						log_info(std::format("Got MAPPED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
 						candidates.emplace_back(std::move(addr));
 						continue;
 					case StunAttributeType::XOR_MAPPED_ADDRESS:
-						addr = stun_deserialize_attr_xor_mapped_address(recv_msg.attributes[i], recv_msg.transaction_id);
-						log_info(std::format("Got XOR_MAPPED_ADDRESS attribute: ip: {} port: {}", addr.ip, addr.port));
+						addr = attribute.parse_xor_mapped_address();
+						log_info(std::format("Got XOR_MAPPED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
 						continue;
 					case StunAttributeType::MESSAGE_INTEGRITY:
 						log_info(std::format("Got MESSAGE_INTEGRITY attribute: {}", 0));
@@ -148,7 +148,7 @@ namespace net {
 						log_info(std::format("Got REAL attribute: {}", 0));
 						continue;
 					case StunAttributeType::SOFTWARE:
-						log_info(std::format("Got SOFTWARE attribute: {}", stun_deserialize_attr_software(recv_msg.attributes[i])));
+						log_info(std::format("Got SOFTWARE attribute: {}", attribute.parse_string()));
 						continue;
 					case StunAttributeType::UNKNOWN_ATTRIBUTES:
 						log_info(std::format("Got UNKNOWN_ATTRIBUTES attribute: {}", 0));
@@ -175,12 +175,12 @@ namespace net {
 						log_info(std::format("Got DEPR_CHANGE_REQUEST attribute: {}", 0));
 						continue;
 					case StunAttributeType::DEPR_SOURCE_ADDRESS:
-						addr = stun_deserialize_attr_mapped_address(recv_msg.attributes[i]);
-						log_info(std::format("Got DEPR_SOURCE_ADDRESS attribute: ip: {} port: {}", addr.ip, addr.port));
+						addr = attribute.parse_mapped_address();
+						log_info(std::format("Got DEPR_SOURCE_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
 						continue;
 					case StunAttributeType::DEPR_CHANGED_ADDRESS:
-						addr = stun_deserialize_attr_mapped_address(recv_msg.attributes[i]);
-						log_info(std::format("Got DEPR_CHANGED_ADDRESS attribute: ip: {} port: {}", addr.ip, addr.port));
+						addr = attribute.parse_mapped_address();
+						log_info(std::format("Got DEPR_CHANGED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
 						continue;
 					case StunAttributeType::DEPR_PASSWORD:
 						log_info(std::format("Got DEPR_PASSWORD attribute: {}", 0));
@@ -201,7 +201,7 @@ namespace net {
 						log_info(std::format("Got ICE_CONTROLLING attribute: {}", 0));
 						continue;
 					default:
-						log_error(std::format("Unknown attribute: {}: {}", recv_msg.attributes[i].type, 0));
+						log_error(std::format("Unknown attribute type: {}", static_cast<uint16_t>(attribute.get_type())));
 					}
 				}
 			}

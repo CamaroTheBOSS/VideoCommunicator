@@ -132,6 +132,7 @@
     <ClCompile Include="log.cpp" />
     <ClCompile Include="ice.cppm" />
     <ClCompile Include="log.cppm" />
+    <ClCompile Include="rng.ixx" />
     <ClCompile Include="socket.cpp" />
     <ClCompile Include="socket.cppm" />
     <ClCompile Include="dns.cpp" />

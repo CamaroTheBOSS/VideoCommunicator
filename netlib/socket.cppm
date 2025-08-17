@@ -6,7 +6,7 @@ export module netlib:socket;
 import std;
 
 export namespace net {
-	export using Socket = uint32_t;
+	export using Socket = uint64_t;
 
 	struct Ipv4Address {
 		uint32_t ip;
@@ -21,5 +21,5 @@ export namespace net {
 	std::string udp_ipv4_net_to_str(const uint32_t ip_net);
 	int			udp_ipv4_send_packet(const Socket socket, const void* data, const size_t size, const Ipv4Address& address);
 	int			udp_ipv4_recv_packet(const Socket socket, void* data, const size_t size, Ipv4Address* address = nullptr);
-	int			udp_ipv4_recv_packet_block(const Socket socket, void* data, const size_t size, Ipv4Address* address = nullptr, const uint64_t timeout_us = 0);
+	int			udp_ipv4_recv_packet_block(const Socket socket, void* data, const size_t size, Ipv4Address* address = nullptr, const uint32_t timeout_us = 0);
 }

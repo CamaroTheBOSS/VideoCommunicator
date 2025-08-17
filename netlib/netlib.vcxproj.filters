@@ -47,5 +47,8 @@
     <ClCompile Include="socket.cpp">
       <Filter>Implementation</Filter>
     </ClCompile>
+    <ClCompile Include="rng.ixx">
+      <Filter>Interface</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
