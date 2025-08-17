@@ -15,6 +15,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "netlib", "netlib\netlib.vcx
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "netlib-test", "netlib-test\netlib-test.vcxproj", "{F581EC75-2F6D-4D88-8FAA-D38955C1E1DB}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "netlib-main", "netlib-main\netlib-main.vcxproj", "{E44C232D-A966-41EA-BDB0-760F651DAD0F}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -71,6 +73,14 @@ Global
 		{F581EC75-2F6D-4D88-8FAA-D38955C1E1DB}.Release|x64.Build.0 = Release|x64
 		{F581EC75-2F6D-4D88-8FAA-D38955C1E1DB}.Release|x86.ActiveCfg = Release|Win32
 		{F581EC75-2F6D-4D88-8FAA-D38955C1E1DB}.Release|x86.Build.0 = Release|Win32
+		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Debug|x64.ActiveCfg = Debug|x64
+		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Debug|x64.Build.0 = Debug|x64
+		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Debug|x86.ActiveCfg = Debug|Win32
+		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Debug|x86.Build.0 = Debug|Win32
+		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Release|x64.ActiveCfg = Release|x64
+		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Release|x64.Build.0 = Release|x64
+		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Release|x86.ActiveCfg = Release|Win32
+		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

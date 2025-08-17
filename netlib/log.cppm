@@ -1,9 +1,10 @@
-#pragma once
+module;
 
-#include <string>
+export module netlib:log;
+import std;
 
-namespace net {
-	static constexpr const char* libname = "netlib";
+export namespace net {
+	constexpr const char* libname = "netlib";
 
 	// Logging
 	void log_wsa_error(const std::string& msg, const char* FILE = __FILE__, const int LINE = __LINE__);

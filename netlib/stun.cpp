@@ -1,11 +1,13 @@
-#include "stun.h"
-#include "common.h"
+module;
 
 #include "WinSock2.h"
 #include "WS2tcpip.h"
 
 #include <assert.h>
-#include <random>
+#include <cstdint>
+#include <time.h>
+
+module netlib:stun;
 
 namespace net {
 	constexpr uint16_t STUN_SIZE_MAX_BYTES = 92;
@@ -133,35 +135,50 @@ namespace net {
 		return offset;
 	}
 
-	SocketAddress stun_deserialize_attr_mapped_address(const StunAttribute& attribute) {
-		SocketAddress address{};
+	Ipv4Address stun_deserialize_attr_mapped_address(const StunAttribute& attribute) {
+		Ipv4Address address{};
 		const uint8_t* data = attribute.data.data();
-		address.family = static_cast<SocketFamily>(data[1]);
+		assert(data[1] == static_cast<uint8_t>(SocketFamily::IPv4));
 		std::memcpy(&address.port, data + 2, 2);
 		address.port = htons(address.port);
-		address.ip = ipv4_net_to_str(data + 4);
+		address.ip = htonl(*reinterpret_cast<const u_long*>(data + 4));
 		return address;
 	}
 
-	SocketAddress stun_deserialize_attr_xor_mapped_address(const StunAttribute& attribute) {
-		SocketAddress address{};
+	Ipv4Address stun_deserialize_attr_xor_mapped_address(const StunAttribute& attribute, const uint32_t transaction_id[3]) {
+		Ipv4Address address{};
 		const uint8_t* data = attribute.data.data();
-		address.family = static_cast<SocketFamily>(data[1]);
+		const uint32_t* data_uint32_t = reinterpret_cast<const uint32_t*>(attribute.data.data() + 4);
+		assert(data[1] == static_cast<uint8_t>(SocketFamily::IPv4));
 		std::memcpy(&address.port, data + 2, 2);
-		address.port = htons(address.port);
-		address.ip = ipv4_net_to_str(data + 4);
+		address.port = htons(address.port) ^ htonl(StunMessage::magic_cookie);
+		//if (address.family == SocketFamily::IPv4) {
+			/*uint32_t unxored_ip[1]{};
+			unxored_ip[0] = data_uint32_t[0] ^ htonl(StunMessage::magic_cookie);
+			address.ip = ipv4_net_to_str(reinterpret_cast<uint8_t*>(unxored_ip));*/
+			address.ip = data_uint32_t[0] ^ htonl(StunMessage::magic_cookie);
+		/*} else if (address.family == SocketFamily::IPv6) {
+			uint32_t unxored_ip[4]{};
+			unxored_ip[0] = data_uint32_t[0] ^ htonl(StunMessage::magic_cookie);
+			unxored_ip[1] = data_uint32_t[1] ^ htonl(transaction_id[2]);
+			unxored_ip[2] = data_uint32_t[2] ^ htonl(transaction_id[1]);
+			unxored_ip[3] = data_uint32_t[3] ^ htonl(transaction_id[0]);
+			address.ip = ipv6_net_to_str(reinterpret_cast<uint8_t*>(unxored_ip));
+		}*/
 		return address;
+	}
+
+	std::string	stun_deserialize_attr_software(const StunAttribute& attribute) {
+		return std::string(reinterpret_cast<const char*>(attribute.data.data()), attribute.data.size());
 	}
 
 	StunMessage stun_deserialize_message(const uint8_t* src) {
 		StunMessage msg{};
 		std::memcpy(&msg.type, src, 2);
 		std::memcpy(&msg.length, src + 2, 2);
-		std::memcpy(&msg.magic_cookie, src + 4, 4);
 		std::memcpy(&msg.transaction_id, src + 8, 12);
 		msg.type = ntohs(msg.type);
 		msg.length = ntohs(msg.length);
-		msg.magic_cookie = ntohl(msg.magic_cookie);
 		msg.transaction_id[0] = ntohl(msg.transaction_id[0]);
 		msg.transaction_id[1] = ntohl(msg.transaction_id[1]);
 		msg.transaction_id[2] = ntohl(msg.transaction_id[2]);
@@ -188,9 +205,9 @@ namespace net {
 		return false;
 	}
 
-	std::string ipv4_net_to_str(const uint8_t* src) {
+	/*std::string ipv4_net_to_str(const uint8_t* src) {
 		std::string ret;
-		ret.reserve(128);
+		ret.reserve(16);
 		for (uint8_t i = 0; i < 4; i++) {
 			uint8_t value = src[i];
 			uint8_t hundreds = value / 100;
@@ -208,4 +225,21 @@ namespace net {
 		ret.erase(ret.size() - 1);
 		return ret;
 	}
+
+	std::string ipv6_net_to_str(const uint8_t* src) {
+		std::string ret;
+		ret.reserve(64);
+		static constexpr char symbols[16] = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
+		for (uint8_t i = 0; i < 16; i += 2) {
+			uint8_t value = src[i];
+			ret += symbols[value >> 4];
+			ret += symbols[value & 0x0F];
+			value = src[i + 1];
+			ret += symbols[value >> 4];
+			ret += symbols[value & 0x0F];
+			ret += ";";
+		}
+		ret.erase(ret.size() - 1);
+		return ret;
+	}*/
 }

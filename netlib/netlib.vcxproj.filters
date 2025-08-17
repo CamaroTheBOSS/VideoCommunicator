@@ -1,42 +1,51 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Pliki źródłowe">
+    <Filter Include="Interface">
+      <UniqueIdentifier>{8e28ddbd-f25c-4833-b310-ccbc5ea584c0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Implementation">
       <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
       <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
     </Filter>
-    <Filter Include="Pliki nagłówkowe">
+    <Filter Include="Headers">
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
-    </Filter>
-    <Filter Include="Pliki zasobów">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stun.cpp">
-      <Filter>Pliki źródłowe</Filter>
+      <Filter>Implementation</Filter>
     </ClCompile>
     <ClCompile Include="ice.cpp">
-      <Filter>Pliki źródłowe</Filter>
+      <Filter>Implementation</Filter>
     </ClCompile>
     <ClCompile Include="dns.cpp">
-      <Filter>Pliki źródłowe</Filter>
+      <Filter>Implementation</Filter>
     </ClCompile>
-    <ClCompile Include="common.cpp">
-      <Filter>Pliki źródłowe</Filter>
+    <ClCompile Include="log.cpp">
+      <Filter>Implementation</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="netlib.h">
-      <Filter>Pliki nagłówkowe</Filter>
-    </ClInclude>
-    <ClInclude Include="common.h">
-      <Filter>Pliki nagłówkowe</Filter>
-    </ClInclude>
-    <ClInclude Include="stun.h">
-      <Filter>Pliki nagłówkowe</Filter>
-    </ClInclude>
+    <ClCompile Include="socket.cppm">
+      <Filter>Interface</Filter>
+    </ClCompile>
+    <ClCompile Include="dns.cppm">
+      <Filter>Interface</Filter>
+    </ClCompile>
+    <ClCompile Include="netlib.cppm">
+      <Filter>Interface</Filter>
+    </ClCompile>
+    <ClCompile Include="log.cppm">
+      <Filter>Interface</Filter>
+    </ClCompile>
+    <ClCompile Include="ice.cppm">
+      <Filter>Interface</Filter>
+    </ClCompile>
+    <ClCompile Include="stun.cppm">
+      <Filter>Interface</Filter>
+    </ClCompile>
+    <ClCompile Include="socket.cpp">
+      <Filter>Implementation</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

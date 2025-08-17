@@ -1,10 +1,12 @@
-#pragma once
-#include <cstdint>
-#include <vector>
-#include <span>
-#include <string>
+module;
 
-namespace net {
+#include <cstdint>
+
+export module netlib:stun;
+import :socket;
+import std;
+
+export namespace net {
 	// STUN Protocol (Session Traversal Utilities for NAT)
 	enum class StunAttributeType : uint16_t {
 		// Standard (comprehension-required)
@@ -31,7 +33,7 @@ namespace net {
 		DEPR_RESPONSE_ADDRESS = 0x0002,
 		DEPR_CHANGE_REQUEST = 0x0003,
 		DEPR_SOURCE_ADDRESS = 0x0004,
-		DEPR_CHANGE_ADDRESS = 0x0005,
+		DEPR_CHANGED_ADDRESS = 0x0005,
 		DEPR_PASSWORD = 0x0007,
 		DEPR_REFLECTED_FROM = 0x000B,
 
@@ -51,8 +53,8 @@ namespace net {
 	};
 
 	enum class StunMethod : uint8_t {
-		BINDING				= 1,
-		DEPR_SHARED_SECRET	= 2,
+		BINDING = 1,
+		DEPR_SHARED_SECRET = 2,
 	};
 
 	struct StunAttribute {
@@ -64,14 +66,14 @@ namespace net {
 
 	struct StunMessage {
 		// Header
-		uint16_t type = 0;						// 2 bits of zeros, 2 bits of class and 12 bits of method
-		uint16_t length = 0;					// defines byte size of the StunMessage without 20 byte HEADER
-		uint32_t magic_cookie = 0x2112A442;			//42A41221
-		uint32_t transaction_id[3] = { 0, 0, 0 };	// random
+		uint16_t type = 0;								 // 2 bits of zeros, 2 bits of class and 12 bits of method
+		uint16_t length = 0;							 // defines byte size of the StunMessage without 20 byte HEADER
+		static const uint32_t magic_cookie = 0x2112A442; //42A41221
+		uint32_t transaction_id[3] = { 0, 0, 0 };		 // random
 		std::vector<StunAttribute> attributes;
 	};
 
-	enum class SocketFamily: uint8_t {
+	enum class SocketFamily : uint8_t {
 		IPv4 = 1,
 		IPv6 = 2
 	};
@@ -118,8 +120,9 @@ namespace net {
 
 	uint16_t			stun_serialize_message(const StunMessage& msg, uint8_t* dst);
 	StunMessage			stun_deserialize_message(const uint8_t* src);
-	SocketAddress		stun_deserialize_attr_mapped_address(const StunAttribute& attribute);
-	SocketAddress		stun_deserialize_attr_xor_mapped_address(const StunAttribute& attribute);
+	Ipv4Address			stun_deserialize_attr_mapped_address(const StunAttribute& attribute);
+	Ipv4Address			stun_deserialize_attr_xor_mapped_address(const StunAttribute& attribute, const uint32_t transaction_id[3]);
+	std::string			stun_deserialize_attr_software(const StunAttribute& attribute);
 	/*void				stun_deserialize_attr_username();
 	void				stun_deserialize_attr_message_integrity();
 	void				stun_deserialize_attr_error_code();
@@ -131,7 +134,7 @@ namespace net {
 
 	void				stun_deserialize_attr_password_algorithms();
 	void				stun_deserialize_attr_alternate_domain();
-	void				stun_deserialize_attr_software();
+
 	void				stun_deserialize_attr_alternate_server();
 	void				stun_deserialize_attr_fingerprint();
 	void				stun_deserialize_attr_depr_response_address();
@@ -143,9 +146,4 @@ namespace net {
 	void				stun_deserialize_attr_ice_use_candidate();
 	void				stun_deserialize_attr_ice_controlled();
 	void				stun_deserialize_attr_ice_controlling();*/
-
-	bool				stun_send_udp_unicast();
-	bool				stun_recv_udp_unicast();
-
-	std::string ipv4_net_to_str(const uint8_t* src);
 }

@@ -1,8 +1,8 @@
-#include "common.h"
+module;
+
 #include "WinSock2.h"
 
-#include <iostream>
-#include <string>
+module netlib:log;
 
 namespace net {
 	void log_wsa_error(const std::string& msg, const char* FILE, const int LINE) {

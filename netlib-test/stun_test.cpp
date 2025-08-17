@@ -126,13 +126,50 @@ TEST(StunTests, AddXorMappedAddressAttrIpv6) {
 	}
 }
 
-//TEST(StunTests, ICETest) {
-//	WSADATA wsaData;
-//	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-//		return;
-//	}
-//	auto host_candidates = net::ice_discover_host_candidates();
-//	auto server_candidates = net::ice_discover_server_candidates();
-//	WSACleanup();
-//	return;
-//}
+TEST(StunTests, DeserializeMappedAddressAttrIpv4) {
+	net::StunAttribute attribute{};
+	attribute.type = static_cast<uint8_t>(net::StunAttributeType::MAPPED_ADDRESS);
+	attribute.length = 8;
+	attribute.data = std::vector<uint8_t>{ 0x00, 0x01, /*port*/ 0xAA, 0xFF, /*address*/ 0xBA, 0xA8, 0xA, 0x1 };
+	auto address = net::stun_deserialize_attr_mapped_address(attribute);
+	EXPECT_EQ(address.family, net::SocketFamily::IPv4);
+	EXPECT_EQ(address.port, 0xAAFF);
+	EXPECT_EQ(address.ip, "186.168.10.1");
+}
+
+TEST(StunTests, DeserializeMappedAddressAttrIpv6) {
+	net::StunAttribute attribute{};
+	attribute.type = static_cast<uint8_t>(net::StunAttributeType::MAPPED_ADDRESS);
+	attribute.length = 20;
+	attribute.data = std::vector<uint8_t>{ 0x00, 0x02, /*port*/ 0xAA, 0xFF, 
+		/*address*/ 0xBA, 0xA8, 0xA, 0x1, 0xFF, 0xCC, 0x2, 0x4, 0xA4, 0xB1, 0x1F, 0x8A, 0xDE, 0xB1, 0x12, 0x00 };
+	auto address = net::stun_deserialize_attr_mapped_address(attribute);
+	EXPECT_EQ(address.family, net::SocketFamily::IPv6);
+	EXPECT_EQ(address.port, 0xAAFF);
+	EXPECT_EQ(address.ip, "BAA8;0A01;FFCC;0204;A4B1;1F8A;DEB1;1200");
+}
+
+TEST(StunTests, DeserializeXorMappedAddressAttrIpv4) {
+	net::StunAttribute attribute{};
+	uint32_t transaction_id[3] = {0xFFFF, 0xABCD, 0x1234};
+	attribute.type = static_cast<uint8_t>(net::StunAttributeType::XOR_MAPPED_ADDRESS);
+	attribute.length = 8;
+	attribute.data = std::vector<uint8_t>{ 0x00, 0x01, /*port*/ 0xAA, 0xFF, /*address*/ 0xBA, 0xA8, 0xA, 0x1 };
+	auto address = net::stun_deserialize_attr_xor_mapped_address(attribute, transaction_id);
+	EXPECT_EQ(address.family, net::SocketFamily::IPv4);
+	EXPECT_EQ(address.port, 0x0BED);
+	EXPECT_EQ(address.ip, "155.186.174.67");
+}
+
+TEST(StunTests, DeserializeXorMappedAddressAttrIpv6) {
+	net::StunAttribute attribute{};
+	uint32_t transaction_id[3] = { 0xFFFF, 0xABCD, 0x1234 };
+	attribute.type = static_cast<uint8_t>(net::StunAttributeType::XOR_MAPPED_ADDRESS);
+	attribute.length = 20;
+	attribute.data = std::vector<uint8_t>{ 0x00, 0x02, /*port*/ 0xAA, 0xFF,
+		/*address*/ 0xBA, 0xA8, 0xA, 0x1, 0xFF, 0xCC, 0x2, 0x4, 0xA4, 0xB1, 0x1F, 0x8A, 0xDE, 0xB1, 0x12, 0x00 };
+	auto address = net::stun_deserialize_attr_xor_mapped_address(attribute, transaction_id);
+	EXPECT_EQ(address.family, net::SocketFamily::IPv6);
+	EXPECT_EQ(address.port, 0xAAFF);
+	EXPECT_EQ(address.ip, "BAA8;0A01;FFCC;0204;A4B1;1F8A;DEB1;1200");
+}
