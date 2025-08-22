@@ -18,211 +18,329 @@ namespace net {
 
 	constexpr uint8_t SIZE_ATTR_MAPPED_ADDR = 8;
 	constexpr uint8_t SIZE_ATTR_XOR_MAPPED_ADDR = 8;
+	constexpr uint8_t SIZE_ATTR_CHANGE_REQUEST = 4;
 
-	Ipv4Address StunAttribute::parse_mapped_address() const {
-		constexpr size_t size = SIZE_ATTR_MAPPED_ADDR;
+	bool StunAddressAttribute::write_into(ByteWriter& dst) const {
+		assert(dst.space() >= SIZE_ATTR_MAPPED_ADDR);
+		dst.write_numeric(STUN);
+		dst.write_numeric(IPv4);
+		dst.write_numeric(htons(addr.port));
+		dst.write_numeric(htonl(addr.ip));
+		return 0;
+	}
+
+	bool StunAddressAttribute::read_from(ByteReader& src) {
 		auto type = get_type();
 		bool compatibile = (type == StunAttributeType::MAPPED_ADDRESS ||
-							type == StunAttributeType::DEPR_SOURCE_ADDRESS ||
-							type == StunAttributeType::DEPR_CHANGED_ADDRESS);
-		assert(compatibile);
-		if (!compatibile) {
-			return {};
-		}
-		assert(data.size() == size);
-		assert(data[size - 1] == STUN && "Got data which is not address attribute");
-		assert(data[size - 2] == IPv4 && "Only IPv4 is supported");
-		if (data.size() != size || data[size - 1] != STUN || data[size - 2] != IPv4) {
-			return {};
-		}
-		Ipv4Address address{};
-		std::memcpy(&address.port, &data[size - 4], sizeof(address.port));
-		address.port = htons(address.port);
-		address.ip = htonl(*reinterpret_cast<const u_long*>(data.data()));
-		return address;
-	}
-
-	Ipv4Address StunAttribute::parse_xor_mapped_address() const {
-		constexpr size_t size = SIZE_ATTR_XOR_MAPPED_ADDR;
-		assert(get_type() == StunAttributeType::XOR_MAPPED_ADDRESS);
-		if (get_type() != StunAttributeType::XOR_MAPPED_ADDRESS) {
-			return {};
-		}
-		assert(data.size() == size);
-		assert(data[size - 1] == STUN && "Got data which is not STUN attribute");
-		assert(data[size - 2] == IPv4 && "Only IPv4 is supported");
-		if (data.size() != size || data[size - 1] != STUN || data[size - 2] != IPv4) {
-			return {};
-		}
-		Ipv4Address address{};
-		std::memcpy(&address.port, &data[size - 4], sizeof(address.port));
-		address.port = htons(address.port) ^ static_cast<u_short>(htonl(MAGIC_COOKIE) >> 16);
-		address.ip = *reinterpret_cast<const uint32_t*>(data.data()) ^ htonl(MAGIC_COOKIE);
-		return address;
-	}
-
-	std::string StunAttribute::parse_string() const {
-		return "";
-	}
-
-	void Stun::set_type(const StunClass new_cls, const StunMethod new_method) {
-		// Method hidden in msg.type: [M11, M10, M9, M8, M7, C1, M6, M5, M4, C0, M3, M2, M1, M0]
-		// where M is method and C is class
-		uint16_t new_method_val = static_cast<uint16_t>(new_method);
-		type =	 new_method_val & 0b0000'0000'1111;
-		type +=	(new_method_val & 0b0000'0111'0000) << 1;
-		type +=	(new_method_val & 0b1111'1000'0000) << 2;
-
-		uint8_t new_class_val = static_cast<uint8_t>(new_cls);
-		type += (new_class_val & 0b1) << 4;
-		type += (new_class_val & 0b10) << 7;
-	}
-
-	void Stun::set_type(const uint16_t new_type) {
-		// Method hidden in msg.type: [M11, M10, M9, M8, M7, C1, M6, M5, M4, C0, M3, M2, M1, M0]
-		// where M is method and C is class
-		uint16_t new_method = 0;
-		new_method +=  new_type & 0b00'0000'0000'1111;
-		new_method += (new_type & 0b00'0000'1110'0000) >> 1;
-		new_method += (new_type & 0b11'1110'0000'0000) >> 2;
-		assert(new_method > 0 && new_method <= 2);
-		method_type = static_cast<StunMethod>(new_method);
-
-		uint8_t new_class = 0;
-		new_class += (new_type & 0b00'0000'0001'0000) >> 4;
-		new_class += (new_type & 0b00'0001'0000'0000) >> 7;
-		assert(new_class >= 0 && new_class <= 3);
-		cls_type = static_cast<StunClass>(new_class);
-	}
-
-	void Stun::add_attr_mapped_address(const Ipv4Address& address) {
-		StunAttribute attribute{};
-		attribute.type = static_cast<uint16_t>(StunAttributeType::MAPPED_ADDRESS);
-		attribute.length = 8;
-		attribute.data = std::vector<uint8_t>(attribute.length);
-		
-		auto data = std::span<uint8_t>(attribute.data.data(), attribute.data.size());
-		data[0] = STUN;
-		data[1] = IPv4;
-		std::memcpy(&data[2], &address.port, sizeof(address.port));
-		std::memcpy(&data[4], &address.ip, sizeof(address.ip));
-		attributes.emplace_back(std::move(attribute));
-	}
-
-	void Stun::add_attr_xor_mapped_address(const Ipv4Address& address) {
-		StunAttribute attribute{};
-		attribute.type = static_cast<uint16_t>(StunAttributeType::XOR_MAPPED_ADDRESS);
-		attribute.length = 8;
-		attribute.data = std::vector<uint8_t>(attribute.length);
-
-		auto data = std::span<uint8_t>(attribute.data.data(), attribute.data.size());
-		data[0] = STUN;
-		data[1] = IPv4;
-
-		// Specification: X-Port is a XOR of port with magic cookie
-		uint16_t port = address.port ^ (MAGIC_COOKIE >> 16);
-		std::memcpy(&data[2], &port, sizeof(port));
-
-		// Specification: If IPv4 make XOR with magic cookie
-		uint32_t ip = address.ip ^ MAGIC_COOKIE;
-		std::memcpy(&data[4], &ip, sizeof(ip));
-		attributes.emplace_back(std::move(attribute));
-	}
-
-	void Stun::add_attr_string(const StunAttributeType type, const std::string& value) {
-		StunAttribute attribute{};
-		attribute.type = static_cast<uint16_t>(type);
-		attribute.length = static_cast<uint16_t>(4 + value.size());
-		attribute.padding = value.size() % 4;
-		attribute.data = std::vector<uint8_t>(attribute.length + attribute.padding);
-
-		auto data = std::span<uint8_t>(attribute.data.data(), attribute.data.size());
-		std::memcpy(&data[0], value.data(), value.size());
-	}
-
-	bool Stun::remove_attr(const StunAttributeType type) {
-		uint16_t type_uint = static_cast<uint16_t>(type);
-		auto it = std::find_if(attributes.cbegin(), attributes.cend(), [type_uint](const StunAttribute& attr) { return attr.type == type_uint; });
-		if (it == attributes.cend()) {
+			type == StunAttributeType::DEPR_SOURCE_ADDRESS ||
+			type == StunAttributeType::DEPR_CHANGED_ADDRESS ||
+			type == StunAttributeType::ALTERNATE_SERVER ||
+			type == StunAttributeType::DEPR_RESPONSE_ADDRESS ||
+			type == StunAttributeType::DEPR_REFLECTED_FROM);
+		if (!compatibile || src.space() >= SIZE_ATTR_MAPPED_ADDR) {
+			assert(compatibile && "Incompatibile attribute type");
+			assert(src.space() >= SIZE_ATTR_MAPPED_ADDR && "Not enough space for this attribute type");
 			return false;
 		}
-		attributes.erase(it);
+		if (src.read_numeric<uint8_t>() != STUN) {
+			assert(false && "Got data which is not address attribute");
+			return false;
+		}
+		if (src.read_numeric<uint8_t>() != IPv4) {
+			assert(false && "Only IPv4 is supported");
+			return 0;
+		}
+		addr.port = ntohs(src.read_numeric<uint16_t>().value_or(0));
+		addr.ip = ntohl(src.read_numeric<u_long>().value_or(0));
 		return true;
 	}
 
-	size_t Stun::write_into(std::span<uint8_t> dst) {
-		assert(dst.size() >= 20 && "Too little space for header serialization");
-		uint16_t nType = htons(type);
-		uint16_t nLength = htons(length);
-		uint32_t nCookie = htonl(MAGIC_COOKIE);
+	//Ipv4Address StunAttribute::parse_mapped_address() const {
+	//	constexpr size_t size = SIZE_ATTR_MAPPED_ADDR;
+	//	auto type = get_type();
+	//	bool compatibile = (type == StunAttributeType::MAPPED_ADDRESS ||
+	//						type == StunAttributeType::DEPR_SOURCE_ADDRESS ||
+	//						type == StunAttributeType::DEPR_CHANGED_ADDRESS ||
+	//						type == StunAttributeType::ALTERNATE_SERVER ||
+	//						type == StunAttributeType::DEPR_RESPONSE_ADDRESS ||
+	//						type == StunAttributeType::DEPR_REFLECTED_FROM);
+	//	assert(compatibile);
+	//	if (!compatibile) {
+	//		return {};
+	//	}
+	//	assert(data.size() == size);
+	//	assert(data[size - 1] == STUN && "Got data which is not address attribute");
+	//	assert(data[size - 2] == IPv4 && "Only IPv4 is supported");
+	//	if (data.size() != size || data[size - 1] != STUN || data[size - 2] != IPv4) {
+	//		return {};
+	//	}
+	//	Ipv4Address address{};
+	//	std::memcpy(&address.port, &data[size - 4], sizeof(address.port));
+	//	address.port = htons(address.port);
+	//	address.ip = htonl(*reinterpret_cast<const u_long*>(data.data()));
+	//	return address;
+	//}
 
-		std::memcpy(&dst[0], &nType, sizeof(nType));
-		std::memcpy(&dst[2], &nLength, sizeof(nLength));
-		std::memcpy(&dst[4], &nCookie, sizeof(nCookie));
-		if (std::find_if(
-			transaction_id.cbegin(), 
-			transaction_id.cend(), 
-			[](uint8_t val) { return val != 0; }) != transaction_id.cend()
-			) {
-			uint64_t id_1 = rng::draw_random(static_cast<uint64_t>(0), static_cast<uint64_t>(UINT64_MAX));
-			uint32_t id_2 = rng::draw_random(static_cast<uint32_t>(0), static_cast<uint32_t>(UINT32_MAX));
-			std::memcpy(&transaction_id[0], &id_1, sizeof(id_1));
-			std::memcpy(&transaction_id[8], &id_2, sizeof(id_2));
-		}
-		std::reverse_copy(&transaction_id[0], &transaction_id[transaction_id.size() - 1], &dst[8]);
-		size_t offset = 20;
-		for (const auto& attribute : attributes) {
-			assert(
-				dst.size() >= offset + 4 + attribute.data.size() && 
-				"Too little space for attribute serialization"
-			);
-			uint16_t nAttrType = htons(attribute.get_type_raw());
-			uint16_t nAttrLength = htons(attribute.length);
-			std::memcpy(&dst[offset], &nAttrType, sizeof(nAttrType));
-			std::memcpy(&dst[offset + 2], &nAttrLength, sizeof(nAttrLength));
-			std::reverse_copy(&attribute.data[0], &attribute.data[attribute.data.size()], &dst[offset + 4]);
-			offset += 4 + attribute.data.size();
-		}
-		return offset;
-	}
+	//Ipv4Address StunAttribute::parse_xor_mapped_address() const {
+	//	constexpr size_t size = SIZE_ATTR_XOR_MAPPED_ADDR;
+	//	assert(get_type() == StunAttributeType::XOR_MAPPED_ADDRESS);
+	//	if (get_type() != StunAttributeType::XOR_MAPPED_ADDRESS) {
+	//		return {};
+	//	}
+	//	assert(data.size() == size);
+	//	assert(data[size - 1] == STUN && "Got data which is not STUN attribute");
+	//	assert(data[size - 2] == IPv4 && "Only IPv4 is supported");
+	//	if (data.size() != size || data[size - 1] != STUN || data[size - 2] != IPv4) {
+	//		return {};
+	//	}
+	//	Ipv4Address address{};
+	//	std::memcpy(&address.port, &data[size - 4], sizeof(address.port));
+	//	address.port = htons(address.port) ^ static_cast<u_short>(htonl(MAGIC_COOKIE) >> 16);
+	//	address.ip = *reinterpret_cast<const uint32_t*>(data.data()) ^ htonl(MAGIC_COOKIE);
+	//	return address;
+	//}
 
-	Stun Stun::read_from(const std::span<uint8_t> src) {
-		assert(src.size() >= 20 && "Stun header is greater than remaining src buffer space");
-		assert((src[0] >> 6) == STUN && "Got message which is not STUN message");
-		Stun msg{};
-		const uint8_t* src_data = src.data();
-		std::memcpy(&msg.type, src_data, sizeof(msg.type));
-		std::memcpy(&msg.length, src_data + 2, sizeof(msg.length));
-		std::reverse_copy(src_data + 8, src_data + 20, &msg.transaction_id[0]);
-		msg.set_type(ntohs(msg.type));
-		msg.length = ntohs(msg.length);
-		size_t offset = 20;
-		while (offset < static_cast<size_t>(msg.length) + 20) {
-			assert(
-				src.size() >= offset + 4 && 
-				"Stun attribute is greater than remaining src buffer space"
-			);
-			StunAttribute attribute{};
-			std::memcpy(&attribute.type, src_data + offset, sizeof(attribute.type));
-			std::memcpy(&attribute.length, src_data + offset + 2, sizeof(attribute.length));
-			attribute.type = ntohs(attribute.type);
-			attribute.length = ntohs(attribute.length);
-			attribute.data = std::vector<uint8_t>(attribute.length);
+	//std::string StunAttribute::parse_string() const {
+	//	auto type = get_type();
+	//	bool compatibile = (type == StunAttributeType::USERNAME ||
+	//		type == StunAttributeType::SOFTWARE ||
+	//		type == StunAttributeType::REALM ||
+	//		type == StunAttributeType::NONCE ||
+	//		type == StunAttributeType::DEPR_PASSWORD);
+	//	assert(compatibile);
+	//	if (!compatibile) {
+	//		return "";
+	//	}
+	//	assert(data.size() >= padding && "Padding cannot be greater than size of the data");
+	//	return std::string(data.rbegin() + padding, data.rend());
+	//}
 
-			assert(
-				src.size() >= offset + 4 + attribute.length && 
-				"Stun attribute's data is greater than remaining src buffer space"
-			);
-			std::reverse_copy(
-				src_data + offset + 4,
-				src_data + offset + 4 + attribute.data.size(),
-				&attribute.data[0]
-			);
-			offset += 4 + attribute.data.size();
-			msg.attributes.emplace_back(std::move(attribute));
-		}
-		return msg;
-	}
+	//StunError StunAttribute::parse_error() const {
+	//	assert(get_type() == StunAttributeType::ERROR_CODE);
+	//	if (get_type() != StunAttributeType::ERROR_CODE) {
+	//		return {};
+	//	}
+	//	auto size = data.size();
+	//	auto end = size - padding;
+	//	assert(end >= 4);
+	//	assert(
+	//		data[end - 1] == STUN && data[end - 2] == STUN &&
+	//		"Got data which is not error STUN attribute"
+	//	);
+	//	uint8_t code_hundreds = data[end - 3];
+	//	uint8_t code_remainder = data[end - 4];
+	//	assert(code_hundreds < 8 && "Invalid error code class");
+	//	assert(code_remainder < 100 && "Invalid error code remainder");
+	//	assert(data.size() >= padding && "Padding cannot be greater than size of the data");
+	//	return StunError{
+	//		static_cast<uint16_t>(static_cast<uint16_t>(code_hundreds) * 100 + code_remainder),
+	//		std::string(data.rbegin() + 4 + padding, data.rend() - padding)
+	//	};
+	//}
+
+	//std::vector<uint16_t> StunAttribute::parse_unknown_attributes() const {
+	//	assert(get_type() == StunAttributeType::UNKNOWN_ATTRIBUTES);
+	//	if (get_type() != StunAttributeType::UNKNOWN_ATTRIBUTES) {
+	//		return {};
+	//	}
+	//	auto size = data.size();
+	//	auto end = size - padding;
+	//	assert(
+	//		end & 0b01 == 0 && 
+	//		"Data should contain list of uint16_t, so size should be divisible by 2"
+	//	);
+	//	auto start = end;
+	//	std::vector<uint16_t> attribute_types;
+	//	while (start > 0) {
+	//		uint16_t value = *reinterpret_cast<const uint16_t*>(data.data() + start);
+	//		attribute_types.push_back(value);
+	//		start -= sizeof(uint16_t);
+	//	}
+	//	return attribute_types;
+	//}
+
+	//std::optional<StunChangeRequest> StunAttribute::parse_change_request() const {
+	//	constexpr size_t size = SIZE_ATTR_CHANGE_REQUEST;
+	//	assert(get_type() == StunAttributeType::DEPR_CHANGE_REQUEST);
+	//	if (get_type() != StunAttributeType::DEPR_CHANGE_REQUEST) {
+	//		return {};
+	//	}
+	//	assert(data.size() == SIZE_ATTR_CHANGE_REQUEST);
+	//	assert(
+	//		data[size - 1] == 0 && data[size - 2] == 0 && data[size - 3] == 0 &&
+	//		"Got data that is not change request STUN attribute"
+	//	);
+	//	if (size != SIZE_ATTR_CHANGE_REQUEST ||
+	//		data[size - 1] != 0 || 
+	//		data[size - 2] != 0 || 
+	//		data[size - 3] != 0
+	//		) {
+	//		return {};
+	//	}
+	//	auto change_request = std::make_optional(StunChangeRequest{});
+	//	change_request->change_addr = data[size - 4] & 0b100;
+	//	change_request->change_port = data[size - 4] & 0b010;
+	//	return change_request;
+	//}
+
+	//void Stun::set_type(const StunClass new_cls, const StunMethod new_method) {
+	//	// Method hidden in msg.type: [M11, M10, M9, M8, M7, C1, M6, M5, M4, C0, M3, M2, M1, M0]
+	//	// where M is method and C is class
+	//	uint16_t new_method_val = static_cast<uint16_t>(new_method);
+	//	type =	 new_method_val & 0b0000'0000'1111;
+	//	type +=	(new_method_val & 0b0000'0111'0000) << 1;
+	//	type +=	(new_method_val & 0b1111'1000'0000) << 2;
+
+	//	uint8_t new_class_val = static_cast<uint8_t>(new_cls);
+	//	type += (new_class_val & 0b1) << 4;
+	//	type += (new_class_val & 0b10) << 7;
+	//}
+
+	//void Stun::set_type(const uint16_t new_type) {
+	//	// Method hidden in msg.type: [M11, M10, M9, M8, M7, C1, M6, M5, M4, C0, M3, M2, M1, M0]
+	//	// where M is method and C is class
+	//	uint16_t new_method = 0;
+	//	new_method +=  new_type & 0b00'0000'0000'1111;
+	//	new_method += (new_type & 0b00'0000'1110'0000) >> 1;
+	//	new_method += (new_type & 0b11'1110'0000'0000) >> 2;
+	//	assert(new_method > 0 && new_method <= 2);
+	//	method_type = static_cast<StunMethod>(new_method);
+
+	//	uint8_t new_class = 0;
+	//	new_class += (new_type & 0b00'0000'0001'0000) >> 4;
+	//	new_class += (new_type & 0b00'0001'0000'0000) >> 7;
+	//	assert(new_class >= 0 && new_class <= 3);
+	//	cls_type = static_cast<StunClass>(new_class);
+	//}
+
+	//void Stun::add_attr_mapped_address(const Ipv4Address& address) {
+	//	StunAttribute attribute{};
+	//	attribute.type = static_cast<uint16_t>(StunAttributeType::MAPPED_ADDRESS);
+	//	attribute.length = 8;
+	//	attribute.data = std::vector<uint8_t>(attribute.length);
+	//	
+	//	auto data = std::span<uint8_t>(attribute.data.data(), attribute.data.size());
+	//	data[0] = STUN;
+	//	data[1] = IPv4;
+	//	std::memcpy(&data[2], &address.port, sizeof(address.port));
+	//	std::memcpy(&data[4], &address.ip, sizeof(address.ip));
+	//	attributes.emplace_back(std::move(attribute));
+	//}
+
+	//void Stun::add_attr_xor_mapped_address(const Ipv4Address& address) {
+	//	StunAttribute attribute{};
+	//	attribute.type = static_cast<uint16_t>(StunAttributeType::XOR_MAPPED_ADDRESS);
+	//	attribute.length = 8;
+	//	attribute.data = std::vector<uint8_t>(attribute.length);
+
+	//	auto data = std::span<uint8_t>(attribute.data.data(), attribute.data.size());
+	//	data[0] = STUN;
+	//	data[1] = IPv4;
+
+	//	// Specification: X-Port is a XOR of port with magic cookie
+	//	uint16_t port = address.port ^ (MAGIC_COOKIE >> 16);
+	//	std::memcpy(&data[2], &port, sizeof(port));
+
+	//	// Specification: If IPv4 make XOR with magic cookie
+	//	uint32_t ip = address.ip ^ MAGIC_COOKIE;
+	//	std::memcpy(&data[4], &ip, sizeof(ip));
+	//	attributes.emplace_back(std::move(attribute));
+	//}
+
+	//void Stun::add_attr_string(const StunAttributeType type, const std::string& value) {
+	//	StunAttribute attribute{};
+	//	attribute.type = static_cast<uint16_t>(type);
+	//	attribute.length = static_cast<uint16_t>(4 + value.size());
+	//	attribute.padding = value.size() % 4;
+	//	attribute.data = std::vector<uint8_t>(attribute.length + attribute.padding);
+
+	//	auto data = std::span<uint8_t>(attribute.data.data(), attribute.data.size());
+	//	std::memcpy(&data[0], value.data(), value.size());
+	//}
+
+	//bool Stun::remove_attr(const StunAttributeType type) {
+	//	uint16_t type_uint = static_cast<uint16_t>(type);
+	//	auto it = std::find_if(attributes.cbegin(), attributes.cend(), [type_uint](const StunAttribute& attr) { return attr.type == type_uint; });
+	//	if (it == attributes.cend()) {
+	//		return false;
+	//	}
+	//	attributes.erase(it);
+	//	return true;
+	//}
+
+	//size_t Stun::write_into(std::span<uint8_t> dst) {
+	//	assert(dst.size() >= 20 && "Too little space for header serialization");
+	//	uint16_t nType = htons(type);
+	//	uint16_t nLength = htons(length);
+	//	uint32_t nCookie = htonl(MAGIC_COOKIE);
+
+	//	std::memcpy(&dst[0], &nType, sizeof(nType));
+	//	std::memcpy(&dst[2], &nLength, sizeof(nLength));
+	//	std::memcpy(&dst[4], &nCookie, sizeof(nCookie));
+	//	if (std::find_if(
+	//		transaction_id.cbegin(), 
+	//		transaction_id.cend(), 
+	//		[](uint8_t val) { return val != 0; }) != transaction_id.cend()
+	//		) {
+	//		uint64_t id_1 = rng::draw_random(static_cast<uint64_t>(0), static_cast<uint64_t>(UINT64_MAX));
+	//		uint32_t id_2 = rng::draw_random(static_cast<uint32_t>(0), static_cast<uint32_t>(UINT32_MAX));
+	//		std::memcpy(&transaction_id[0], &id_1, sizeof(id_1));
+	//		std::memcpy(&transaction_id[8], &id_2, sizeof(id_2));
+	//	}
+	//	std::reverse_copy(&transaction_id[0], &transaction_id[transaction_id.size() - 1], &dst[8]);
+	//	size_t offset = 20;
+	//	for (const auto& attribute : attributes) {
+	//		assert(
+	//			dst.size() >= offset + 4 + attribute.data.size() && 
+	//			"Too little space for attribute serialization"
+	//		);
+	//		uint16_t nAttrType = htons(attribute.get_type_raw());
+	//		uint16_t nAttrLength = htons(attribute.length);
+	//		std::memcpy(&dst[offset], &nAttrType, sizeof(nAttrType));
+	//		std::memcpy(&dst[offset + 2], &nAttrLength, sizeof(nAttrLength));
+	//		std::reverse_copy(&attribute.data[0], &attribute.data[attribute.data.size()], &dst[offset + 4]);
+	//		offset += 4 + attribute.data.size();
+	//	}
+	//	return offset;
+	//}
+
+	//Stun Stun::read_from(const std::span<const uint8_t> src) {
+	//	assert(src.size() >= 20 && "Stun header is greater than remaining src buffer space");
+	//	assert((src[0] >> 6) == STUN && "Got message which is not STUN message");
+	//	Stun msg{};
+	//	const uint8_t* src_data = src.data();
+	//	std::memcpy(&msg.type, src_data, sizeof(msg.type));
+	//	std::memcpy(&msg.length, src_data + 2, sizeof(msg.length));
+	//	std::reverse_copy(src_data + 8, src_data + 20, &msg.transaction_id[0]);
+	//	msg.set_type(ntohs(msg.type));
+	//	msg.length = ntohs(msg.length);
+	//	size_t offset = 20;
+	//	while (offset < static_cast<size_t>(msg.length) + 20) {
+	//		assert(
+	//			src.size() >= offset + 4 && 
+	//			"Stun attribute is greater than remaining src buffer space"
+	//		);
+	//		StunAttribute attribute{};
+	//		std::memcpy(&attribute.type, src_data + offset, sizeof(attribute.type));
+	//		std::memcpy(&attribute.length, src_data + offset + 2, sizeof(attribute.length));
+	//		attribute.type = ntohs(attribute.type);
+	//		attribute.length = ntohs(attribute.length);
+	//		attribute.data = std::vector<uint8_t>(attribute.length);
+
+	//		assert(
+	//			src.size() >= offset + 4 + attribute.length && 
+	//			"Stun attribute's data is greater than remaining src buffer space"
+	//		);
+	//		std::reverse_copy(
+	//			src_data + offset + 4,
+	//			src_data + offset + 4 + attribute.data.size(),
+	//			&attribute.data[0]
+	//		);
+	//		offset += 4 + attribute.data.size();
+	//		msg.attributes.emplace_back(std::move(attribute));
+	//	}
+	//	return msg;
+	//}
 
 	//StunMethod stun_get_msg_method(const StunMessage& msg) {
 	//	// Method hidden in msg.type: [M11, M10, M9, M8, M7, C1, M6, M5, M4, C0, M3, M2, M1, M0]

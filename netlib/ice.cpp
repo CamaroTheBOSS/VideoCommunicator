@@ -43,7 +43,7 @@ namespace net {
 	}
 
 	std::vector<Ipv4Address> ice_discover_server_candidates() {
-		constexpr const char* stun_servers[7] = {
+		/*constexpr const char* stun_servers[7] = {
 			"stun.12connect.com",
 			"stun.12voip.com",
 			"stun.1und1.de",
@@ -80,9 +80,9 @@ namespace net {
 				log_info(std::format("Sending to server '{}' with ip '{}' successful.", server, ip));
 				FD_SET(connection, &connections);
 			}
-		}
+		}*/
 
-		timeval timeout{ .tv_usec = 1'000'000 };
+		/*timeval timeout{ .tv_usec = 1'000'000 };
 		while (connections.fd_count > 0) {
 			FD_SET listen_connections = connections;
 			int socket_count = select(0, &listen_connections, nullptr, nullptr, &timeout);
@@ -118,94 +118,95 @@ namespace net {
 						ip_str, static_cast<uint16_t>(msg_method), static_cast<uint8_t>(msg_class))
 					);
 					continue;
-				}
-				Ipv4Address addr;
-				for (const auto& attribute : recv_msg.get_attributes()) {
-					auto type = attribute.get_type();
-					switch (type) {
-					case StunAttributeType::ALTERNATE_SERVER:
-						log_info(std::format("Got ALTERNATE_SERVER attribute: {}", 0));
-						continue;
-					case StunAttributeType::ERROR_CODE:
-						log_info(std::format("Got ERROR_CODE attribute: {}", 0));
-						continue;
-					case StunAttributeType::MAPPED_ADDRESS:
-						addr = attribute.parse_mapped_address();
-						log_info(std::format("Got MAPPED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
-						candidates.emplace_back(std::move(addr));
-						continue;
-					case StunAttributeType::XOR_MAPPED_ADDRESS:
-						addr = attribute.parse_xor_mapped_address();
-						log_info(std::format("Got XOR_MAPPED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
-						continue;
-					case StunAttributeType::MESSAGE_INTEGRITY:
-						log_info(std::format("Got MESSAGE_INTEGRITY attribute: {}", 0));
-						continue;
-					case StunAttributeType::NONCE:
-						log_info(std::format("Got NONCE attribute: {}", 0));
-						continue;
-					case StunAttributeType::REAL:
-						log_info(std::format("Got REAL attribute: {}", 0));
-						continue;
-					case StunAttributeType::SOFTWARE:
-						log_info(std::format("Got SOFTWARE attribute: {}", attribute.parse_string()));
-						continue;
-					case StunAttributeType::UNKNOWN_ATTRIBUTES:
-						log_info(std::format("Got UNKNOWN_ATTRIBUTES attribute: {}", 0));
-						continue;
-					case StunAttributeType::USERNAME:
-						log_info(std::format("Got USERNAME attribute: {}", 0));
-						continue;
-					case StunAttributeType::FINGERPRINT:
-						log_info(std::format("Got FINGERPRINT attribute: {}", 0));
-						continue;
-					case StunAttributeType::MESSAGE_INTEGRITY_SHA256:
-						log_info(std::format("Got MESSAGE_INTEGRITY_SHA256 attribute: {}", 0));
-						continue;
-					case StunAttributeType::PASSWORD_ALGORITHM:
-						log_info(std::format("Got PASSWORD_ALGORITHM attribute: {}", 0));
-						continue;
-					case StunAttributeType::USERHASH:
-						log_info(std::format("Got USERHASH attribute: {}", 0));
-						continue;
-					case StunAttributeType::DEPR_RESPONSE_ADDRESS:
-						log_info(std::format("Got DEPR_RESPONSE_ADDRESS attribute: {}", 0));
-						continue;
-					case StunAttributeType::DEPR_CHANGE_REQUEST:
-						log_info(std::format("Got DEPR_CHANGE_REQUEST attribute: {}", 0));
-						continue;
-					case StunAttributeType::DEPR_SOURCE_ADDRESS:
-						addr = attribute.parse_mapped_address();
-						log_info(std::format("Got DEPR_SOURCE_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
-						continue;
-					case StunAttributeType::DEPR_CHANGED_ADDRESS:
-						addr = attribute.parse_mapped_address();
-						log_info(std::format("Got DEPR_CHANGED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
-						continue;
-					case StunAttributeType::DEPR_PASSWORD:
-						log_info(std::format("Got DEPR_PASSWORD attribute: {}", 0));
-						continue;
-					case StunAttributeType::DEPR_REFLECTED_FROM:
-						log_info(std::format("Got DEPR_REFLECTED_FROM attribute: {}", 0));
-						continue;
-					case StunAttributeType::ICE_PRIORITY:
-						log_info(std::format("Got PRIORITY attribute: {}", 0));
-						continue;
-					case StunAttributeType::ICE_USE_CANDIDATE:
-						log_info(std::format("Got USE_CANDIDATE attribute: {}", 0));
-						continue;
-					case StunAttributeType::ICE_CONTROLLED:
-						log_info(std::format("Got ICE_CONTROLLED attribute: {}", 0));
-						continue;
-					case StunAttributeType::ICE_CONTROLLING:
-						log_info(std::format("Got ICE_CONTROLLING attribute: {}", 0));
-						continue;
-					default:
-						log_error(std::format("Unknown attribute type: {}", static_cast<uint16_t>(attribute.get_type())));
-					}
-				}
-			}
-		}
-		return candidates;
+				}*/
+				//Ipv4Address addr;
+				//for (const auto& attribute : recv_msg.get_attributes()) {
+				//	//auto type = attribute.get_type();
+				//	//switch (type) {
+				//	//case StunAttributeType::ALTERNATE_SERVER:
+				//	//	log_info(std::format("Got ALTERNATE_SERVER attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::ERROR_CODE:
+				//	//	log_info(std::format("Got ERROR_CODE attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::MAPPED_ADDRESS:
+				//	//	//addr = attribute.parse_mapped_address();
+				//	//	//log_info(std::format("Got MAPPED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
+				//	//	//candidates.emplace_back(std::move(addr));
+				//	//	continue;
+				//	//case StunAttributeType::XOR_MAPPED_ADDRESS:
+				//	//	//addr = attribute.parse_xor_mapped_address();
+				//	//	//log_info(std::format("Got XOR_MAPPED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
+				//	//	continue;
+				//	//case StunAttributeType::MESSAGE_INTEGRITY:
+				//	//	log_info(std::format("Got MESSAGE_INTEGRITY attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::NONCE:
+				//	//	log_info(std::format("Got NONCE attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::REALM:
+				//	//	log_info(std::format("Got REAL attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::SOFTWARE:
+				//	//	//log_info(std::format("Got SOFTWARE attribute: {}", attribute.parse_string()));
+				//	//	continue;
+				//	//case StunAttributeType::UNKNOWN_ATTRIBUTES:
+				//	//	log_info(std::format("Got UNKNOWN_ATTRIBUTES attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::USERNAME:
+				//	//	//log_info(std::format("Got USERNAME attribute: {}", attribute.parse_string()));
+				//	//	continue;
+				//	//case StunAttributeType::FINGERPRINT:
+				//	//	log_info(std::format("Got FINGERPRINT attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::MESSAGE_INTEGRITY_SHA256:
+				//	//	log_info(std::format("Got MESSAGE_INTEGRITY_SHA256 attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::PASSWORD_ALGORITHM:
+				//	//	log_info(std::format("Got PASSWORD_ALGORITHM attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::USERHASH:
+				//	//	log_info(std::format("Got USERHASH attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::DEPR_RESPONSE_ADDRESS:
+				//	//	log_info(std::format("Got DEPR_RESPONSE_ADDRESS attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::DEPR_CHANGE_REQUEST:
+				//	//	log_info(std::format("Got DEPR_CHANGE_REQUEST attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::DEPR_SOURCE_ADDRESS:
+				//	//	//addr = attribute.parse_mapped_address();
+				//	//	//log_info(std::format("Got DEPR_SOURCE_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
+				//	//	continue;
+				//	//case StunAttributeType::DEPR_CHANGED_ADDRESS:
+				//	//	//addr = attribute.parse_mapped_address();
+				//	//	//log_info(std::format("Got DEPR_CHANGED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
+				//	//	continue;
+				//	//case StunAttributeType::DEPR_PASSWORD:
+				//	//	log_info(std::format("Got DEPR_PASSWORD attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::DEPR_REFLECTED_FROM:
+				//	//	log_info(std::format("Got DEPR_REFLECTED_FROM attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::ICE_PRIORITY:
+				//	//	log_info(std::format("Got PRIORITY attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::ICE_USE_CANDIDATE:
+				//	//	log_info(std::format("Got USE_CANDIDATE attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::ICE_CONTROLLED:
+				//	//	log_info(std::format("Got ICE_CONTROLLED attribute: {}", 0));
+				//	//	continue;
+				//	//case StunAttributeType::ICE_CONTROLLING:
+				//	//	log_info(std::format("Got ICE_CONTROLLING attribute: {}", 0));
+				//	//	continue;
+				//	//default:
+				//	//	//log_error(std::format("Unknown attribute type: {}", static_cast<uint16_t>(attribute.get_type())));
+				//	//}
+				//}
+			//}
+		//}
+		//return candidates;
+		return {};
 	}
 }

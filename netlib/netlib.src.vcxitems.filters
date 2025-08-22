@@ -1,0 +1,55 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Modules">
+      <UniqueIdentifier>{b4e5056c-944b-4c24-859b-27769a7af30e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Sources">
+      <UniqueIdentifier>{a9939ffb-a5ae-4648-82e4-2442486e972c}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)byte_common.cppm">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)dns.cppm">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)ice.cppm">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)log.cppm">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)netlib.cppm">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)rng.ixx">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)socket.cppm">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)stun.cppm">
+      <Filter>Modules</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)byte_common.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)dns.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)ice.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)log.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)socket.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)stun.cpp">
+      <Filter>Sources</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

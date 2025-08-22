@@ -17,6 +17,12 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "netlib-test", "netlib-test\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "netlib-main", "netlib-main\netlib-main.vcxproj", "{E44C232D-A966-41EA-BDB0-760F651DAD0F}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "netlib.src", "netlib\netlib.src.vcxitems", "{7D334965-7785-4BA1-8BF0-EFED9002C1E2}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "netlib-noassert", "netlib\netlib-noassert.vcxproj", "{2088CBD7-DB98-48F8-BD4A-43B0A5552BD5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "netlib-projects", "netlib-projects", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -81,11 +87,31 @@ Global
 		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Release|x64.Build.0 = Release|x64
 		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Release|x86.ActiveCfg = Release|Win32
 		{E44C232D-A966-41EA-BDB0-760F651DAD0F}.Release|x86.Build.0 = Release|Win32
+		{2088CBD7-DB98-48F8-BD4A-43B0A5552BD5}.Debug|x64.ActiveCfg = Debug|x64
+		{2088CBD7-DB98-48F8-BD4A-43B0A5552BD5}.Debug|x64.Build.0 = Debug|x64
+		{2088CBD7-DB98-48F8-BD4A-43B0A5552BD5}.Debug|x86.ActiveCfg = Debug|Win32
+		{2088CBD7-DB98-48F8-BD4A-43B0A5552BD5}.Debug|x86.Build.0 = Debug|Win32
+		{2088CBD7-DB98-48F8-BD4A-43B0A5552BD5}.Release|x64.ActiveCfg = Release|x64
+		{2088CBD7-DB98-48F8-BD4A-43B0A5552BD5}.Release|x64.Build.0 = Release|x64
+		{2088CBD7-DB98-48F8-BD4A-43B0A5552BD5}.Release|x86.ActiveCfg = Release|Win32
+		{2088CBD7-DB98-48F8-BD4A-43B0A5552BD5}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{AB87ED5D-49BD-43FA-AA18-B9553CDC37F7} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{F581EC75-2F6D-4D88-8FAA-D38955C1E1DB} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{E44C232D-A966-41EA-BDB0-760F651DAD0F} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{7D334965-7785-4BA1-8BF0-EFED9002C1E2} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{2088CBD7-DB98-48F8-BD4A-43B0A5552BD5} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {9FB0C96B-D081-4340-A0B0-0E33803E73F2}
+	EndGlobalSection
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		netlib\netlib.src.vcxitems*{2088cbd7-db98-48f8-bd4a-43b0a5552bd5}*SharedItemsImports = 4
+		netlib\netlib.src.vcxitems*{7d334965-7785-4ba1-8bf0-efed9002c1e2}*SharedItemsImports = 9
+		netlib\netlib.src.vcxitems*{ab87ed5d-49bd-43fa-aa18-b9553cdc37f7}*SharedItemsImports = 4
 	EndGlobalSection
 EndGlobal

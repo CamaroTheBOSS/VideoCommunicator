@@ -1,0 +1,32 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Label="Globals">
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <ItemsProjectGuid>{7d334965-7785-4ba1-8bf0-efed9002c1e2}</ItemsProjectGuid>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories);$(MSBuildThisFileDirectory)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ProjectCapability Include="SourceItemsFromImports" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)byte_common.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)byte_common.cppm" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)dns.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)dns.cppm" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)ice.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)ice.cppm" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)log.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)log.cppm" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)netlib.cppm" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)rng.ixx" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)socket.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)socket.cppm" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)stun.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)stun.cppm" />
+  </ItemGroup>
+</Project>
