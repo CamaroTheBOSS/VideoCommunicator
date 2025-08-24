@@ -21,26 +21,97 @@ namespace net {
 	constexpr uint8_t SIZE_ATTR_CHANGE_REQUEST = 4;
 	constexpr uint8_t SIZE_STUN_HEADER = 20;
 
+	template <std::derived_from<StunAttribute> T>
+	bool validate_attr_read(const T& attr, const ByteNetworkReader& reader) {
+		auto type = attr.get_type();
+		auto length = attr.get_length();
+		bool compatibile = false;
+		bool enough_space = false;
+		if constexpr (std::is_same_v<T, StunAddressAttribute>) {
+			compatibile = (type == StunAttributeType::MAPPED_ADDRESS ||
+				type == StunAttributeType::DEPR_RESPONSE_ADDRESS ||
+				type == StunAttributeType::DEPR_SOURCE_ADDRESS ||
+				type == StunAttributeType::DEPR_CHANGED_ADDRESS ||
+				type == StunAttributeType::DEPR_REFLECTED_FROM ||
+				type == StunAttributeType::ALTERNATE_SERVER);
+			enough_space = reader.space() >= SIZE_ATTR_MAPPED_ADDR;
+		}
+		else if constexpr (std::is_same_v<T, StunXorAddressAttribute>) {
+			compatibile = (type == StunAttributeType::XOR_MAPPED_ADDRESS);
+			enough_space = reader.space() >= SIZE_ATTR_MAPPED_ADDR;
+		}
+		else if constexpr (std::is_same_v<T, StunStringAttribute>) {
+			compatibile = (type == StunAttributeType::USERNAME ||
+				type == StunAttributeType::SOFTWARE ||
+				type == StunAttributeType::REALM ||
+				type == StunAttributeType::NONCE ||
+				type == StunAttributeType::DEPR_PASSWORD);
+			enough_space = reader.space() >= length;
+		}
+		else if constexpr (std::is_same_v<T, StunErrorAttribute>) {
+			compatibile = (type == StunAttributeType::ERROR_CODE);
+			enough_space = reader.space() >= length;
+		}
+		else if constexpr (std::is_same_v<T, StunIntValueAttribute<T>>) {
+			compatibile = true;
+			enough_space = reader.space() >= sizeof(T);
+		}
+		else if constexpr (std::is_same_v<T, StunUInt16ListAttribute>) {
+			compatibile = (type == StunAttributeType::UNKNOWN_ATTRIBUTES);
+			enough_space = reader.space() >= length;
+		}
+		if (!compatibile) {
+			assert(compatibile && "Incompatibile attribute type");
+			return false;
+		}
+		if (!enough_space) {
+			assert(false && "Not enough space to read attribute from given buffer");
+			return false;
+		}
+		return true;
+	}
+
+	template <std::derived_from<StunAttribute> T>
+	bool validate_attr_write(const T& attr, const ByteNetworkWriter& writer) {
+		auto length = attr.get_length();
+		bool enough_space = false;
+		if constexpr (std::is_same_v<T, StunAddressAttribute>) {
+			enough_space = writer.space() >= SIZE_ATTR_MAPPED_ADDR;
+		}
+		else if constexpr (std::is_same_v<T, StunXorAddressAttribute>) {
+			enough_space = writer.space() >= SIZE_ATTR_MAPPED_ADDR;
+		}
+		else if constexpr (std::is_same_v<T, StunStringAttribute>) {
+			enough_space = writer.space() >= length;
+		}
+		else if constexpr (std::is_same_v<T, StunErrorAttribute>) {
+			enough_space = writer.space() >= length;
+		}
+		else if constexpr (std::is_same_v<T, StunIntValueAttribute<T>>) {
+			enough_space = writer.space() >= sizeof(T);
+		}
+		else if constexpr (std::is_same_v<T, StunUInt16ListAttribute>) {
+			enough_space = writer.space() >= length;
+		}
+		if (!enough_space) {
+			assert(false && "Not enough space to write attribute into given buffer");
+			return false;
+		}
+		return true;
+	}
+
 	bool StunAddressAttribute::write_into(ByteNetworkWriter& dst) const {
-		assert(dst.space() >= SIZE_ATTR_MAPPED_ADDR);
+		if (!validate_attr_write(*this, dst)) {
+			return false;
+		}
 		dst.write_numeric(STUN);
 		dst.write_numeric(IPv4);
 		dst.write_numeric(addr.port);
-		dst.write_numeric(addr.ip);
-		return 0;
+		return dst.write_numeric(addr.ip);
 	}
 
 	bool StunAddressAttribute::read_from(ByteNetworkReader& src) {
-		auto type = get_type();
-		bool compatibile = (type == StunAttributeType::MAPPED_ADDRESS ||
-			type == StunAttributeType::DEPR_SOURCE_ADDRESS ||
-			type == StunAttributeType::DEPR_CHANGED_ADDRESS ||
-			type == StunAttributeType::ALTERNATE_SERVER ||
-			type == StunAttributeType::DEPR_RESPONSE_ADDRESS ||
-			type == StunAttributeType::DEPR_REFLECTED_FROM);
-		if (!compatibile || src.space() < SIZE_ATTR_MAPPED_ADDR) {
-			assert(compatibile && "Incompatibile attribute type");
-			assert(src.space() < SIZE_ATTR_MAPPED_ADDR && "Not enough space for this attribute type");
+		if (!validate_attr_read(*this, src)) {
 			return false;
 		}
 		uint8_t byte = 0;
@@ -57,65 +128,130 @@ namespace net {
 		return true;
 	}
 
-	//Ipv4Address StunAttribute::parse_mapped_address() const {
-	//	constexpr size_t size = SIZE_ATTR_MAPPED_ADDR;
-	//	auto type = get_type();
-	//	bool compatibile = (type == StunAttributeType::MAPPED_ADDRESS ||
-	//						type == StunAttributeType::DEPR_SOURCE_ADDRESS ||
-	//						type == StunAttributeType::DEPR_CHANGED_ADDRESS ||
-	//						type == StunAttributeType::ALTERNATE_SERVER ||
-	//						type == StunAttributeType::DEPR_RESPONSE_ADDRESS ||
-	//						type == StunAttributeType::DEPR_REFLECTED_FROM);
-	//	assert(compatibile);
-	//	if (!compatibile) {
-	//		return {};
-	//	}
-	//	assert(data.size() == size);
-	//	assert(data[size - 1] == STUN && "Got data which is not address attribute");
-	//	assert(data[size - 2] == IPv4 && "Only IPv4 is supported");
-	//	if (data.size() != size || data[size - 1] != STUN || data[size - 2] != IPv4) {
-	//		return {};
-	//	}
-	//	Ipv4Address address{};
-	//	std::memcpy(&address.port, &data[size - 4], sizeof(address.port));
-	//	address.port = htons(address.port);
-	//	address.ip = htonl(*reinterpret_cast<const u_long*>(data.data()));
-	//	return address;
-	//}
+	bool StunXorAddressAttribute::write_into(ByteNetworkWriter& dst) const {
+		if (!validate_attr_write(*this, dst)) {
+			return false;
+		}
+		dst.write_numeric(STUN);
+		dst.write_numeric(IPv4);
+		dst.write_numeric(addr.port ^ (MAGIC_COOKIE >> 16));
+		return dst.write_numeric(addr.ip ^ MAGIC_COOKIE);
+	}
 
-	//Ipv4Address StunAttribute::parse_xor_mapped_address() const {
-	//	constexpr size_t size = SIZE_ATTR_XOR_MAPPED_ADDR;
-	//	assert(get_type() == StunAttributeType::XOR_MAPPED_ADDRESS);
-	//	if (get_type() != StunAttributeType::XOR_MAPPED_ADDRESS) {
-	//		return {};
-	//	}
-	//	assert(data.size() == size);
-	//	assert(data[size - 1] == STUN && "Got data which is not STUN attribute");
-	//	assert(data[size - 2] == IPv4 && "Only IPv4 is supported");
-	//	if (data.size() != size || data[size - 1] != STUN || data[size - 2] != IPv4) {
-	//		return {};
-	//	}
-	//	Ipv4Address address{};
-	//	std::memcpy(&address.port, &data[size - 4], sizeof(address.port));
-	//	address.port = htons(address.port) ^ static_cast<u_short>(htonl(MAGIC_COOKIE) >> 16);
-	//	address.ip = *reinterpret_cast<const uint32_t*>(data.data()) ^ htonl(MAGIC_COOKIE);
-	//	return address;
-	//}
+	bool StunXorAddressAttribute::read_from(ByteNetworkReader& src) {
+		if (!validate_attr_read(*this, src)) {
+			return false;
+		}
+		uint8_t byte = 0;
+		if (!src.read_numeric(&byte) || byte != STUN) {
+			assert(false && "Got data which is not stun attribute");
+			return false;
+		}
+		if (!src.read_numeric(&byte) || byte != IPv4) {
+			assert(false && "Got data which is not address attribute");
+			return false;
+		}
+		src.read_numeric(&addr.port);
+		src.read_numeric(&addr.ip);
+		addr.port ^= MAGIC_COOKIE >> 16;
+		addr.ip ^= MAGIC_COOKIE;
+		return true;
+	}
 
-	//std::string StunAttribute::parse_string() const {
-	//	auto type = get_type();
-	//	bool compatibile = (type == StunAttributeType::USERNAME ||
-	//		type == StunAttributeType::SOFTWARE ||
-	//		type == StunAttributeType::REALM ||
-	//		type == StunAttributeType::NONCE ||
-	//		type == StunAttributeType::DEPR_PASSWORD);
-	//	assert(compatibile);
-	//	if (!compatibile) {
-	//		return "";
-	//	}
-	//	assert(data.size() >= padding && "Padding cannot be greater than size of the data");
-	//	return std::string(data.rbegin() + padding, data.rend());
-	//}
+	bool StunStringAttribute::write_into(ByteNetworkWriter& dst) const {
+		if (!validate_attr_write(*this, dst)) {
+			return false;
+		}
+		return dst.write_bytes(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(text.data()), text.size()));
+	}
+
+	bool StunStringAttribute::read_from(ByteNetworkReader& src) {
+		if (!validate_attr_read(*this, src)) {
+			return false;
+		}
+		text = std::string(length, '\0');
+		src.read_bytes(text);
+		src.skip(padding);
+		return true;
+	}
+
+	bool StunErrorAttribute::write_into(ByteNetworkWriter& dst) const {
+		if (!validate_attr_write(*this, dst)) {
+			return false;
+		}
+		dst.write_numeric<uint16_t>(0x00);
+		dst.write_numeric(err_code);
+		return dst.write_bytes(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(err_reason.data()), err_reason.size()));
+	}
+
+	bool StunErrorAttribute::read_from(ByteNetworkReader& src) {
+		if (!validate_attr_read(*this, src)) {
+			return false;
+		}
+		uint16_t zeros = 0;
+		src.read_numeric<uint16_t>(&zeros);
+		if (zeros != 0) {
+			assert(false && "Incorrect first two bytes of data, should be 0");
+			return false;
+		}
+		uint8_t err_class = 0;
+		uint8_t err_tens = 0;
+		src.read_numeric(&err_class);
+		src.read_numeric(&err_tens);
+		err_code = err_class * 100 + err_tens;
+		err_reason = std::string(length - 4, '\0');
+		src.read_bytes(err_reason);
+		src.skip(padding);
+		return true;
+	}
+
+	bool StunUInt16ListAttribute::write_into(ByteNetworkWriter& dst) const {
+		if (!validate_attr_write(*this, dst)) {
+			return false;
+		}
+		for (const auto& val : vals) {
+			dst.write_numeric(val);
+		}
+		return true;
+	}
+
+	bool StunUInt16ListAttribute::read_from(ByteNetworkReader& src) {
+		if (!validate_attr_read(*this, src)) {
+			return false;
+		}
+		vals = std::vector<uint16_t>(length >> 1);
+		for (auto& val : vals) {
+			src.read_numeric(&val);
+		}
+		return true;
+	}
+
+	//	USERNAME = 0x0006,
+		//	MESSAGE_INTEGRITY = 0x0008,
+		//	ERROR_CODE = 0x0009,
+		//	UNKNOWN_ATTRIBUTES = 0x000A,
+		//	REALM = 0x0014,
+		//	NONCE = 0x0015,
+		//	MESSAGE_INTEGRITY_SHA256 = 0x001C,
+		//	PASSWORD_ALGORITHM = 0x001D,
+		//	USERHASH = 0x001E,
+
+		//	// Standard (comprehension-optional)
+		//	PASSWORD_ALGORITHMS = 0x8002,
+		//	SOFTWARE = 0x8022,
+		//	FINGERPRINT = 0x8028,
+
+		//	// Standard (deprecated)
+		//	DEPR_CHANGE_REQUEST = 0x0003,
+		//	DEPR_PASSWORD = 0x0007,
+		//	DEPR_REFLECTED_FROM = 0x000B,
+
+		//	// ICE Extension (comprehension-required)
+		//	ICE_PRIORITY = 0x0024,
+		//	ICE_USE_CANDIDATE = 0x0025,
+		//	// ICE Extension (comprehension-optional)
+		//	ICE_CONTROLLED = 0x8029,
+		//	ICE_CONTROLLING = 0x802A,
 
 	//StunError StunAttribute::parse_error() const {
 	//	assert(get_type() == StunAttributeType::ERROR_CODE);
@@ -328,10 +464,68 @@ namespace net {
 			src.read_numeric(&attr_type);
 			src.read_numeric(&attr_length);
 			auto attribute = create_attr(attr_type, attr_length);
-			attribute->read_from(src);
+			if (!attribute) {
+				assert(false, "Invalid attribute type");
+				return {};
+			}
+			if (!attribute->read_from(src)) {
+				return {};
+			}
 			msg.attributes.emplace_back(std::move(attribute));
 		}
 		return std::make_optional(std::move(msg));
+	}
+
+	const StunAddressAttribute* Stun::get_address_attribute(const StunAttributeType attr_type) const {
+		switch (attr_type) {
+		case StunAttributeType::MAPPED_ADDRESS:
+		case StunAttributeType::DEPR_RESPONSE_ADDRESS:
+		case StunAttributeType::DEPR_SOURCE_ADDRESS:
+		case StunAttributeType::DEPR_CHANGED_ADDRESS:
+		case StunAttributeType::ALTERNATE_SERVER:
+		case StunAttributeType::DEPR_REFLECTED_FROM:
+			return static_cast<const StunAddressAttribute*>(get_attribute(attr_type));
+		default:
+			return nullptr;
+		}
+	}
+
+	const StunXorAddressAttribute* Stun::get_xor_address_attribute(const StunAttributeType attr_type) const {
+		switch (attr_type) {
+		case StunAttributeType::XOR_MAPPED_ADDRESS:
+			return static_cast<const StunXorAddressAttribute*>(get_attribute(attr_type));
+		default:
+			return nullptr;
+		}
+	}
+	const StunStringAttribute* Stun::get_string_attribute(const StunAttributeType attr_type) const {
+		switch (attr_type) {
+		case StunAttributeType::USERNAME:
+		case StunAttributeType::SOFTWARE:
+		case StunAttributeType::REALM:
+		case StunAttributeType::NONCE:
+		case StunAttributeType::DEPR_PASSWORD:
+			return static_cast<const StunStringAttribute*>(get_attribute(attr_type));
+		default:
+			return nullptr;
+		}
+	}
+
+	const StunErrorAttribute* Stun::get_error_attribute(const StunAttributeType attr_type) const {
+		switch (attr_type) {
+		case StunAttributeType::ERROR_CODE:
+			return static_cast<const StunErrorAttribute*>(get_attribute(attr_type));
+		default:
+			return nullptr;
+		}
+	}
+	const StunUInt16ListAttribute* Stun::get_uint16_list_attribute(const StunAttributeType attr_type) const {
+		switch (attr_type) {
+		case StunAttributeType::UNKNOWN_ATTRIBUTES:
+			return static_cast<const StunUInt16ListAttribute*>(get_attribute(attr_type));
+		default:
+			return nullptr;
+		}
 	}
 
 	std::unique_ptr<StunAttribute> Stun::create_attr(const uint16_t type, const uint16_t length) {
@@ -344,8 +538,22 @@ namespace net {
 		case StunAttributeType::ALTERNATE_SERVER:
 		case StunAttributeType::DEPR_REFLECTED_FROM:
 			return std::make_unique<StunAddressAttribute>(type, length);
+		case StunAttributeType::XOR_MAPPED_ADDRESS:
+			return std::make_unique<StunXorAddressAttribute>(type, length);
+		case StunAttributeType::USERNAME:
+		case StunAttributeType::SOFTWARE:
+		case StunAttributeType::REALM:
+		case StunAttributeType::NONCE:
+		case StunAttributeType::DEPR_PASSWORD:
+			return std::make_unique<StunStringAttribute>(type, length);
+		case StunAttributeType::ERROR_CODE:
+			return std::make_unique<StunErrorAttribute>(type, length);
+		case StunAttributeType::ICE_PRIORITY:
+			return std::make_unique<StunIntValueAttribute<uint8_t>>(type, length);
+		case StunAttributeType::UNKNOWN_ATTRIBUTES:
+			return std::make_unique<StunUInt16ListAttribute>(type, length);
 		default:
-			return std::make_unique<StunAddressAttribute>(type, length);
+			return nullptr;
 		}
 	}
 
@@ -382,10 +590,6 @@ namespace net {
 		//	// ICE Extension (comprehension-optional)
 		//	ICE_CONTROLLED = 0x8029,
 		//	ICE_CONTROLLING = 0x802A,
-
-	const StunAddressAttribute* Stun::get_mapped_address_attribute() const {
-		return static_cast<const StunAddressAttribute*>(get_attribute(StunAttributeType::MAPPED_ADDRESS));
-	}
 
 	const StunAttribute* Stun::get_attribute(const StunAttributeType attr_type) const {
 		for (const auto& attr : attributes) {

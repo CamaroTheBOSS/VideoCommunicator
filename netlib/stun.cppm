@@ -1,6 +1,7 @@
 module;
 
 #include <cstdint>
+#include <assert.h>
 
 export module netlib:stun;
 import :socket;
@@ -75,14 +76,22 @@ export namespace net {
 		StunAttribute(const uint16_t type, const uint16_t length) :
 			type(type),
 			length(length),
-			padding(length & 0b11) {}
+			padding(get_padding(length)) {}
 		StunAttributeType get_type() const { return static_cast<StunAttributeType>(type); }
 		uint16_t get_type_raw() const { return type; }
+		uint16_t get_length() const { return length; }
 
 		virtual bool write_into(ByteNetworkWriter& dst) const = 0;
 		virtual bool read_from(ByteNetworkReader& src) = 0;
-		static constexpr uint16_t HEADER_SIZE = 4;
 	protected:
+		uint16_t get_padding(const uint16_t length) const {
+			auto rest = length & 0b11;
+			if (rest == 0) {
+				return 0;
+			}
+			return 4 - rest;
+		}
+
 		uint16_t type;				// 16 bits attribute type
 		uint16_t length = 0;		// 16 bits data length in bytes
 		uint16_t padding = 0;		// attribute starts on 32 bit word boundaries
@@ -100,51 +109,85 @@ export namespace net {
 		Ipv4Address addr;
 	};
 
-	/*class StunAddressAttribute : public StunAttribute {
+	class StunXorAddressAttribute : public StunAttribute {
 	public:
-		virtual int write_into(std::span<uint8_t> dst) const override;
-		virtual int read_from(const std::span<const uint8_t> src) override;
-		const Ipv4Address& value() const { return val; }
-	private:
-		Ipv4Address val;
-	};
+		StunXorAddressAttribute(const uint16_t type, const uint16_t length) :
+			StunAttribute(type, length) {
+		}
+		const Ipv4Address& address() const { return addr; }
 
-	class StunUInt32Attribute : public StunAttribute {
-	public:
-		virtual int write_into(std::span<uint8_t> dst) const override;
-		virtual int read_from(const std::span<const uint8_t> src) override;
-		const uint32_t value() const { return val; }
+		bool write_into(ByteNetworkWriter& dst) const override;
+		bool read_from(ByteNetworkReader& src) override;
 	private:
-		uint32_t val;
-	};
-
-	class StunUInt64Attribute : public StunAttribute {
-	public:
-		virtual int write_into(std::span<uint8_t> dst) const override;
-		virtual int read_from(const std::span<const uint8_t> src) override;
-		const uint64_t value() const { return val; }
-	private:
-		uint64_t val;
-	};
-
-	class StunUInt16ListAttribute : public StunAttribute {
-	public:
-		virtual int write_into(std::span<uint8_t> dst) const override;
-		virtual int read_from(const std::span<const uint8_t> src) override;
-		const std::vector<uint16_t>& value() const { return val; }
-	private:
-		std::vector<uint16_t> val;
+		Ipv4Address addr;
 	};
 
 	class StunStringAttribute : public StunAttribute {
 	public:
-		virtual int write_into(std::span<uint8_t> dst) const override;
-		virtual int read_from(const std::span<const uint8_t> src) override;
+		StunStringAttribute(const uint16_t type, const uint16_t length) :
+			StunAttribute(type, length) {
+		}
 		const std::string& str() const { return text; }
+
+		bool write_into(ByteNetworkWriter& dst) const override;
+		bool read_from(ByteNetworkReader& src) override;
 	private:
 		std::string text;
-	};*/
+	};
 
+	class StunErrorAttribute : public StunAttribute {
+	public:
+		StunErrorAttribute(const uint16_t type, const uint16_t length) :
+			StunAttribute(type, length) {
+		}
+		uint16_t code() const { return err_code; }
+		const std::string& reason() const { return err_reason; }
+
+		bool write_into(ByteNetworkWriter& dst) const override;
+		bool read_from(ByteNetworkReader& src) override;
+	private:
+		uint16_t err_code;
+		std::string err_reason;
+	};
+
+	template<std::integral T>
+	class StunIntValueAttribute : public StunAttribute {
+	public:
+		StunIntValueAttribute(const uint16_t type, const uint16_t length) :
+			StunAttribute(type, length) {
+		}
+		T value() const { return val; }
+
+		bool write_into(ByteNetworkWriter& dst) const override {
+			if (dst.space() < sizeof(T)) {
+				assert(false && "Not enough space to write attribute into given buffer");
+				return false;
+			}
+			return dst.write_numeric(val);
+		}
+		bool read_from(ByteNetworkReader& src) override {
+			if (src.space() < sizeof(T)) {
+				assert(false && "Not enough space to read attribute from given buffer");
+				return false;
+			}
+			return src.read_numeric(&val);
+		}
+	private:
+		T val;
+	};
+
+	class StunUInt16ListAttribute : public StunAttribute {
+	public:
+		StunUInt16ListAttribute(const uint16_t type, const uint16_t length) :
+			StunAttribute(type, length) {
+		}
+		const std::vector<uint16_t>& values() const { return vals; }
+
+		bool write_into(ByteNetworkWriter& dst) const override;
+		bool read_from(ByteNetworkReader& src) override;
+	private:
+		std::vector<uint16_t> vals;
+	};
 
 
 	class Stun {
@@ -176,8 +219,22 @@ export namespace net {
 		bool write_into(ByteNetworkWriter& dst);
 		static std::optional<Stun> read_from(ByteNetworkReader& src);
 		static std::unique_ptr<StunAttribute> create_attr(const uint16_t type, const uint16_t length);
+		
+		template <std::integral T>
+		const StunIntValueAttribute<T>* get_int_value_attribute(const StunAttributeType attr_type) const {
+			switch (attr_type) {
+			case StunAttributeType::ICE_PRIORITY:
+				return static_cast<const StunIntValueAttribute<T>*>(get_attribute(attr_type));
+			default:
+				return nullptr;
+			}
+		}
 		const StunAddressAttribute* get_address_attribute(const StunAttributeType attr_type) const;
-	
+		const StunXorAddressAttribute* get_xor_address_attribute(const StunAttributeType attr_type) const;
+		const StunStringAttribute* get_string_attribute(const StunAttributeType attr_type) const;
+		const StunErrorAttribute* get_error_attribute(const StunAttributeType attr_type) const;
+		const StunUInt16ListAttribute* get_uint16_list_attribute(const StunAttributeType attr_type) const;
+
 		bool set_type(const StunClass new_cls, const StunMethod new_method);
 		bool set_type(const uint16_t new_type);
 	private:

@@ -58,6 +58,13 @@ export namespace net {
 		uint64_t size() const { return bytes.size(); }
 		uint64_t offset() const { return pointer; }
 		uint64_t space() const { return size() - offset(); }
+		bool set_pointer(uint64_t new_pointer) { 
+			if (new_pointer < 0 || new_pointer > size()) {
+				return false;
+			}
+			pointer = new_pointer;
+			return true;
+		}
 		const std::span<const uint8_t> data() const { return bytes; }
 
 		template <std::integral T>
@@ -75,17 +82,27 @@ export namespace net {
 			pointer += sizeof(T);
 			return true;
 		}
-
+		bool read_bytes(std::string& dst) {
+			return read_bytes(std::span<uint8_t>(reinterpret_cast<uint8_t*>(dst.data()), dst.size()));
+		}
 		bool read_bytes(std::span<uint8_t>&& dst) {
 			return read_bytes(std::move(dst), dst.size());
 		}
 		bool read_bytes(std::span<uint8_t>&& dst, const uint64_t size) {
-			if (space() < size || size > dst.size()) {
+			if (space() < size || dst.size() < size) {
 				assert(space() >= size && "There is no space in the src buffer to read bytes with length 'size'");
 				assert(false && "There is no space in the dst buffer to write bytes read from src buffer");
 				return false;
 			}
 			std::memcpy(dst.data(), bytes.data() + pointer, size);
+			pointer += size;
+			return true;
+		}
+		bool skip(const uint32_t size) {
+			if (space() < size) {
+				assert(false && "Tried to skip too much bytes");
+				return false;
+			}
 			pointer += size;
 			return true;
 		}
@@ -115,10 +132,10 @@ export namespace net {
 			pointer += sizeof(T);
 			return true;
 		}
-		bool write_bytes(std::span<uint8_t>&& src) {
+		bool write_bytes(std::span<const uint8_t>&& src) {
 			return write_bytes(std::move(src), src.size());
 		}
-		bool write_bytes(std::span<uint8_t>&& src, const uint64_t size) {
+		bool write_bytes(std::span<const uint8_t>&& src, const uint64_t size) {
 			if (space() < size || size > src.size()) {
 				assert(space() >= size && "There is no space in the dst buffer to write bytes with length 'size'");
 				assert(false && "There is no space in the src buffer to read bytes with length 'size'");
