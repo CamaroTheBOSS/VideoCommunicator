@@ -22,4 +22,5 @@ export namespace net {
 	int			udp_ipv4_send_packet(const Socket socket, const void* data, const size_t size, const Ipv4Address& address);
 	int			udp_ipv4_recv_packet(const Socket socket, void* data, const size_t size, Ipv4Address* address = nullptr);
 	int			udp_ipv4_recv_packet_block(const Socket socket, void* data, const size_t size, Ipv4Address* address = nullptr, const uint32_t timeout_us = 0);
+	std::string ipv4_net_to_str(const std::span<const uint8_t, 4> src);
 }

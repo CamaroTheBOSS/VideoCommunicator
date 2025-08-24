@@ -68,6 +68,14 @@ export namespace net {
 		bool change_addr;
 		bool change_port;
 	};
+
+	template<std::integral T>
+	class StunIntValueAttribute;
+	class StunAddressAttribute;
+	class StunXorAddressAttribute;
+	class StunStringAttribute;
+	class StunErrorAttribute;
+	class StunUInt16ListAttribute;
 	
 	class StunAttribute {
 		friend class Stun;
@@ -83,6 +91,16 @@ export namespace net {
 
 		virtual bool write_into(ByteNetworkWriter& dst) const = 0;
 		virtual bool read_from(ByteNetworkReader& src) = 0;
+
+		template<std::integral T>
+		static std::unique_ptr<StunIntValueAttribute<T>> create_attr_int_value(const StunAttributeType type) {
+			return std::make_unique<StunIntValueAttribute<T>>(static_cast<uint16_t>(type), 0);
+		}
+		static std::unique_ptr<StunAddressAttribute> create_attr_address(const StunAttributeType type);
+		static std::unique_ptr<StunXorAddressAttribute> create_attr_address_xor(const StunAttributeType type);
+		static std::unique_ptr<StunStringAttribute> create_attr_string(const StunAttributeType type);
+		static std::unique_ptr<StunErrorAttribute> create_attr_error(const StunAttributeType type);
+		static std::unique_ptr<StunUInt16ListAttribute> create_attr_uint16_list(const StunAttributeType type);
 	protected:
 		uint16_t get_padding(const uint16_t length) const {
 			auto rest = length & 0b11;
@@ -105,6 +123,9 @@ export namespace net {
 
 		bool write_into(ByteNetworkWriter& dst) const override;
 		bool read_from(ByteNetworkReader& src) override;
+		void set_port(uint16_t port) { addr.port = port; }
+		void set_ip(uint32_t ip) { addr.ip = ip; }
+		void set_ip(const std::string& ip) { addr.ip = net_to_host(udp_ipv4_str_to_net(ip)); };
 	private:
 		Ipv4Address addr;
 	};
@@ -118,6 +139,9 @@ export namespace net {
 
 		bool write_into(ByteNetworkWriter& dst) const override;
 		bool read_from(ByteNetworkReader& src) override;
+		void set_port(uint16_t port) { addr.port = port; }
+		void set_ip(uint32_t ip) { addr.ip = ip; }
+		void set_ip(const std::string& ip) { addr.ip = net_to_host(udp_ipv4_str_to_net(ip)); };
 	private:
 		Ipv4Address addr;
 	};
@@ -131,6 +155,10 @@ export namespace net {
 
 		bool write_into(ByteNetworkWriter& dst) const override;
 		bool read_from(ByteNetworkReader& src) override;
+		void set_string(const std::string& str) {
+			text = str;
+			length = static_cast<uint16_t>(text.size());
+		}
 	private:
 		std::string text;
 	};
@@ -145,6 +173,11 @@ export namespace net {
 
 		bool write_into(ByteNetworkWriter& dst) const override;
 		bool read_from(ByteNetworkReader& src) override;
+		void set_error(const uint16_t new_err_code, const std::string& new_reason) {
+			err_code = new_err_code;
+			err_reason = new_reason;
+			length = 2 + static_cast<uint16_t>(new_reason.size());
+		}
 	private:
 		uint16_t err_code;
 		std::string err_reason;
@@ -172,6 +205,7 @@ export namespace net {
 			}
 			return src.read_numeric(&val);
 		}
+		bool set_value(const T new_value) { val = new_value; }
 	private:
 		T val;
 	};
@@ -185,6 +219,16 @@ export namespace net {
 
 		bool write_into(ByteNetworkWriter& dst) const override;
 		bool read_from(ByteNetworkReader& src) override;
+		void add_value(const uint16_t value) { 
+			vals.push_back(value);
+			length += sizeof(value);
+		}
+		void remove_last() { 
+			if (vals.size() > 0) {
+				vals.pop_back();
+				length -= sizeof(uint16_t);
+			}
+		}
 	private:
 		std::vector<uint16_t> vals;
 	};
@@ -219,7 +263,6 @@ export namespace net {
 		bool write_into(ByteNetworkWriter& dst);
 		static std::optional<Stun> read_from(ByteNetworkReader& src);
 		static std::unique_ptr<StunAttribute> create_attr(const uint16_t type, const uint16_t length);
-		
 		template <std::integral T>
 		const StunIntValueAttribute<T>* get_int_value_attribute(const StunAttributeType attr_type) const {
 			switch (attr_type) {

@@ -110,4 +110,25 @@ namespace net {
 		}
 		return {};
 	}
+
+	std::string ipv4_net_to_str(const std::span<const uint8_t, 4> src) {
+		std::string ret;
+		ret.reserve(16);
+		for (uint8_t i = 0; i < 4; i++) {
+			uint8_t value = src[i];
+			uint8_t hundreds = value / 100;
+			uint8_t tens = (value - 100 * hundreds) / 10;
+			uint8_t units = value - 100 * hundreds - 10 * tens;
+			if (hundreds) {
+				ret += '0' + hundreds;
+			}
+			if (tens) {
+				ret += '0' + tens;
+			}
+			ret += '0' + units;
+			ret += '.';
+		}
+		ret.erase(ret.size() - 1);
+		return ret;
+	}
 }

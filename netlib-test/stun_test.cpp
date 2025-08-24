@@ -10,7 +10,7 @@ constexpr std::array<uint8_t, 12> test_transaction_id = {
 	0xf2, 0x41, 0x01, 0x00,
 };
 
-constexpr uint8_t stun_msg_with_mapped_address_ipv4[] = {
+constexpr std::array<uint8_t, 32> stun_msg_with_mapped_address_ipv4 = {
   0x01, 0x01, 0x00, 0x0c,   // binding response, length 12
   0x21, 0x12, 0xa4, 0x42,   // magic cookie
   0x29, 0x1f, 0xcd, 0x7c,   // transaction ID
@@ -21,7 +21,7 @@ constexpr uint8_t stun_msg_with_mapped_address_ipv4[] = {
   0xac, 0x17, 0x44, 0xe6   // IPv4 address
 };
 
-constexpr uint8_t stun_msg_with_xor_mapped_address_ipv4[] = {
+constexpr std::array<uint8_t, 32>  stun_msg_with_xor_mapped_address_ipv4 = {
   0x01, 0x01, 0x00, 0x0c,   // binding response, length 12
   0x21, 0x12, 0xa4, 0x42,   // magic cookie
   0x29, 0x1f, 0xcd, 0x7c,   // transaction ID
@@ -32,7 +32,7 @@ constexpr uint8_t stun_msg_with_xor_mapped_address_ipv4[] = {
   0x8d, 0x05, 0xe0, 0xa4   // xored IPv4 address
 };
 
-constexpr uint8_t stun_msg_with_username[] = {
+constexpr std::array<uint8_t, 32>  stun_msg_with_username = {
   0x01, 0x01, 0x00, 0x0c,   // binding response, length 12
   0x21, 0x12, 0xa4, 0x42,   // magic cookie
   0x29, 0x1f, 0xcd, 0x7c,   // transaction ID
@@ -43,7 +43,7 @@ constexpr uint8_t stun_msg_with_username[] = {
   'n', 'a', 'm', 'e' 
 };
 
-constexpr uint8_t stun_msg_with_error[] = {
+constexpr std::array<uint8_t, 40>  stun_msg_with_error = {
   0x01, 0x01, 0x00, 0x14,   // binding response, length 20
   0x21, 0x12, 0xa4, 0x42,   // magic cookie
   0x29, 0x1f, 0xcd, 0x7c,   // transaction ID
@@ -56,7 +56,7 @@ constexpr uint8_t stun_msg_with_error[] = {
   'd', 0x00, 0x00, 0x00	   // Padding
 };
 
-constexpr uint8_t stun_msg_with_unknown_attribute[] = {
+constexpr std::array<uint8_t, 32>  stun_msg_with_unknown_attribute = {
   0x01, 0x01, 0x00, 0x0c,   // binding response, length 12
   0x21, 0x12, 0xa4, 0x42,   // magic cookie
   0x29, 0x1f, 0xcd, 0x7c,   // transaction ID
@@ -178,4 +178,12 @@ TEST(StunTests, ReadMsgWithUnknownAttribute) {
 	}
 	std::vector<uint16_t> expected = { 0x8888, 0x8788, 0x6996, 0x88ff };
 	EXPECT_EQ(0, std::memcmp(reinterpret_cast<const void*>(unknown_ptr->values().data()), expected.data(), expected.size()));
+}
+
+TEST(StunTests, WriteMsgWithAddressAttribute) {
+	auto buffer = ByteNetworkWriter(stun_msg_with_mapped_address_ipv4.size());
+	auto msg = Stun();
+	auto attr = StunAttribute::create_attr_address(StunAttributeType::MAPPED_ADDRESS);
+	msg.set_type(StunClass::REQUEST, StunMethod::BINDING);
+	//EXPECT_EQ(0, std::memcmp(reinterpret_cast<const void*>(unknown_ptr->values().data()), expected.data(), expected.size()));
 }
