@@ -1,12 +1,13 @@
 #include "pch.h"
 
 import std;
+import byte_common;
 import netlib;
 
 constexpr std::array<uint8_t, 12> test_transaction_id = {
-	0x00, 0x01, 0x41, 0xf2,
-	0xd7, 0xab, 0x58, 0xba,
-	0x7c, 0xcd, 0x1f, 0x29,
+	0x29, 0x1f, 0xcd, 0x7c,
+	0xba, 0x58, 0xab, 0xd7,
+	0xf2, 0x41, 0x01, 0x00,
 };
 
 constexpr uint8_t stun_msg_with_mapped_address_ipv4[] = {
@@ -143,12 +144,12 @@ constexpr uint8_t kRtcpPacket[] = {
 };
 
 using namespace net;
-constexpr uint8_t transaction_id_size = 12;
-static void check_transaction_id(const Stun& msg) {
-	EXPECT_TRUE(msg.transact_id().size() == transaction_id_size);
-	EXPECT_EQ(msg.transact_id(), test_transaction_id);
-}
-
+//constexpr uint8_t transaction_id_size = 12;
+//static void check_transaction_id(const Stun& msg) {
+//	EXPECT_TRUE(msg.transact_id().size() == transaction_id_size);
+//	EXPECT_EQ(msg.transact_id(), test_transaction_id);
+//}
+//
 static void check_mapped_address(const Ipv4Address& address) {
 	static const Ipv4Address test_ipv4_address{
 		0xac1744e6,
@@ -159,16 +160,22 @@ static void check_mapped_address(const Ipv4Address& address) {
 }
 
 TEST(StunTests, ReadMsgWithMappedAddress) {
-	/*auto msg = Stun::read_from(stun_msg_with_mapped_address_ipv4);
+	auto buffer = ByteNetworkReader(stun_msg_with_mapped_address_ipv4);
+	auto msg_opt = Stun::read_from(buffer);
+	EXPECT_TRUE(msg_opt.has_value());
+	if (!msg_opt.has_value()) {
+		return;
+	}
+	auto& msg = msg_opt.value();
 	EXPECT_TRUE(msg.cls() == StunClass::SUCCESS_RESPONSE);
 	EXPECT_TRUE(msg.method() == StunMethod::BINDING);
-	check_transaction_id(msg);*/
-	
-	/*auto& attributes = msg.get_attributes();
-	EXPECT_EQ(attributes.size(), 1);
-	EXPECT_EQ(attributes[0].get_type(), StunAttributeType::MAPPED_ADDRESS);
-	auto ip = attributes[0].parse_mapped_address();
-	check_mapped_address(ip);*/
+	EXPECT_EQ(0, std::memcmp(reinterpret_cast<const void*>(msg.transact_id().data()), &test_transaction_id, test_transaction_id.size()));
+	auto address_attr_ptr = msg.get_mapped_address_attribute();
+	EXPECT_FALSE(address_attr_ptr == nullptr);
+	if (address_attr_ptr == nullptr) {
+		return;
+	}
+	check_mapped_address(address_attr_ptr->address());
 }
 
 TEST(StunTests, SetterTests) {

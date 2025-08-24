@@ -24,7 +24,7 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)netlib.cppm">
       <Filter>Modules</Filter>
     </ClCompile>
-    <ClCompile Include="$(MSBuildThisFileDirectory)rng.ixx">
+    <ClCompile Include="$(MSBuildThisFileDirectory)rng.cppm">
       <Filter>Modules</Filter>
     </ClCompile>
     <ClCompile Include="$(MSBuildThisFileDirectory)socket.cppm">

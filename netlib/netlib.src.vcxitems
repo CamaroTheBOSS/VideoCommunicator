@@ -23,7 +23,9 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)log.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)log.cppm" />
     <ClCompile Include="$(MSBuildThisFileDirectory)netlib.cppm" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)rng.ixx" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)rng.cppm">
+      <FileType>Document</FileType>
+    </ClCompile>
     <ClCompile Include="$(MSBuildThisFileDirectory)socket.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)socket.cppm" />
     <ClCompile Include="$(MSBuildThisFileDirectory)stun.cpp" />

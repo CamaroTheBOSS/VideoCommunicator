@@ -71,12 +71,16 @@ export namespace net {
 	class StunAttribute {
 		friend class Stun;
 	public:
+		StunAttribute() = default;
+		StunAttribute(const uint16_t type, const uint16_t length) :
+			type(type),
+			length(length),
+			padding(length & 0b11) {}
 		StunAttributeType get_type() const { return static_cast<StunAttributeType>(type); }
-		uint16_t get_type_raw() const { return static_cast<uint16_t>(type); }
+		uint16_t get_type_raw() const { return type; }
 
-		virtual bool write_into(ByteWriter& dst) const = 0;
-		virtual bool read_from(ByteReader& src) = 0;
-
+		virtual bool write_into(ByteNetworkWriter& dst) const = 0;
+		virtual bool read_from(ByteNetworkReader& src) = 0;
 		static constexpr uint16_t HEADER_SIZE = 4;
 	protected:
 		uint16_t type;				// 16 bits attribute type
@@ -86,10 +90,12 @@ export namespace net {
 
 	class StunAddressAttribute : public StunAttribute {
 	public:
+		StunAddressAttribute(const uint16_t type, const uint16_t length) :
+			StunAttribute(type, length) {}
 		const Ipv4Address& address() const { return addr; }
 
-		bool write_into(ByteWriter& dst) const override;
-		bool read_from(ByteReader& src) override;
+		bool write_into(ByteNetworkWriter& dst) const override;
+		bool read_from(ByteNetworkReader& src) override;
 	private:
 		Ipv4Address addr;
 	};
@@ -143,22 +149,40 @@ export namespace net {
 
 	class Stun {
 	public:
+		Stun() = default;
+		Stun(Stun&& other) noexcept :
+			type(other.type),
+			length(other.length),
+			transaction_id(std::move(other.transaction_id)),
+			attributes(std::move(other.attributes)),
+			cls_type(other.cls_type),
+			method_type(other.method_type) {}
+		Stun& operator=(Stun&& other) {
+			type = other.type;
+			length = other.length;
+			transaction_id = std::move(other.transaction_id);
+			attributes = std::move(other.attributes);
+			cls_type = other.cls_type;
+			method_type = other.method_type;
+		}
+		Stun(const Stun&) = delete;
+		Stun& operator=(const Stun&) = delete;
+
 		StunClass cls() const { return cls_type; };
 		StunMethod method() const { return method_type; };
-		const std::array<uint8_t, 12> transact_id() const { return transaction_id; }
+		const std::array<uint8_t, 12>& transact_id() const { return transaction_id; }
 		void clear_transaction_id() { std::memset(&transaction_id, 0, transaction_id.size()); }
-		/*void set_type(const StunClass new_cls, const StunMethod new_method);
-		void set_type(const uint16_t new_type);*/
-		const std::vector<std::unique_ptr<StunAttribute>>& get_attributes() const { return attributes; }
 
-		/*void add_attr_mapped_address(const Ipv4Address& address);
-		void add_attr_xor_mapped_address(const Ipv4Address& address);
-		void add_attr_string(const StunAttributeType type, const std::string& value);
-		bool remove_attr(const StunAttributeType type);*/
-
-		/*size_t write_into(std::span<uint8_t> dst);
-		static Stun read_from(const std::span<const uint8_t> src);*/
+		bool write_into(ByteNetworkWriter& dst);
+		static std::optional<Stun> read_from(ByteNetworkReader& src);
+		static std::unique_ptr<StunAttribute> create_attr(const uint16_t type, const uint16_t length);
+		const StunAddressAttribute* get_address_attribute(const StunAttributeType attr_type) const;
+	
+		bool set_type(const StunClass new_cls, const StunMethod new_method);
+		bool set_type(const uint16_t new_type);
 	private:
+		const StunAttribute* get_attribute(const StunAttributeType attr_type) const;
+
 		// Physical part of Stun packet
 		uint16_t type = 0;								 // 2 bits of zeros, 2 bits of class and 12 bits of method
 		uint16_t length = 0;							 // defines byte size of the StunMessage without 20 byte HEADER
