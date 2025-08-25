@@ -102,7 +102,11 @@ export namespace net {
 		static std::unique_ptr<StunErrorAttribute> create_attr_error(const StunAttributeType type);
 		static std::unique_ptr<StunUInt16ListAttribute> create_attr_uint16_list(const StunAttributeType type);
 	protected:
-		uint16_t get_padding(const uint16_t length) const {
+		void set_length(const uint16_t len) {
+			length = len;
+			padding = get_padding(len);
+		}
+		uint16_t get_padding(const uint16_t len) const {
 			auto rest = length & 0b11;
 			if (rest == 0) {
 				return 0;
@@ -157,7 +161,7 @@ export namespace net {
 		bool read_from(ByteNetworkReader& src) override;
 		void set_string(const std::string& str) {
 			text = str;
-			length = static_cast<uint16_t>(text.size());
+			set_length(static_cast<uint16_t>(text.size()));
 		}
 	private:
 		std::string text;
@@ -173,11 +177,7 @@ export namespace net {
 
 		bool write_into(ByteNetworkWriter& dst) const override;
 		bool read_from(ByteNetworkReader& src) override;
-		void set_error(const uint16_t new_err_code, const std::string& new_reason) {
-			err_code = new_err_code;
-			err_reason = new_reason;
-			length = 2 + static_cast<uint16_t>(new_reason.size());
-		}
+		void set_error(const uint16_t new_err_code, const std::string& new_reason);
 	private:
 		uint16_t err_code;
 		std::string err_reason;
@@ -259,6 +259,8 @@ export namespace net {
 		StunMethod method() const { return method_type; };
 		const std::array<uint8_t, 12>& transact_id() const { return transaction_id; }
 		void clear_transaction_id() { std::memset(&transaction_id, 0, transaction_id.size()); }
+		void set_transaction_id(const std::span<const uint8_t, 12> new_transaction_id) { std::memcpy(&transaction_id, new_transaction_id.data(), new_transaction_id.size()); }
+		void randomize_transaction_id();
 
 		bool write_into(ByteNetworkWriter& dst);
 		static std::optional<Stun> read_from(ByteNetworkReader& src);
@@ -277,6 +279,8 @@ export namespace net {
 		const StunStringAttribute* get_string_attribute(const StunAttributeType attr_type) const;
 		const StunErrorAttribute* get_error_attribute(const StunAttributeType attr_type) const;
 		const StunUInt16ListAttribute* get_uint16_list_attribute(const StunAttributeType attr_type) const;
+		bool add_attribute(std::unique_ptr<StunAttribute> attr);
+		bool remove_attribute(const StunAttributeType attr_type);
 
 		bool set_type(const StunClass new_cls, const StunMethod new_method);
 		bool set_type(const uint16_t new_type);

@@ -3,11 +3,22 @@
 import std;
 import byte_common;
 import netlib;
+using namespace net;
 
 constexpr std::array<uint8_t, 12> test_transaction_id = {
 	0x29, 0x1f, 0xcd, 0x7c,
 	0xba, 0x58, 0xab, 0xd7,
 	0xf2, 0x41, 0x01, 0x00,
+};
+constexpr Ipv4Address test_ipv4_address{
+		0xac1744e6,
+		0x9dfc
+};
+constexpr const char* test_username = "username";
+constexpr const char* test_error_reason = "not found";
+constexpr uint16_t test_error_code = 404;
+constexpr std::array<uint16_t, 4> test_unknown_attribute_types = {
+	0x8888, 0x8788, 0x6996, 0x88ff
 };
 
 constexpr std::array<uint8_t, 32> stun_msg_with_mapped_address_ipv4 = {
@@ -67,18 +78,8 @@ constexpr std::array<uint8_t, 32>  stun_msg_with_unknown_attribute = {
   0x69, 0x96, 0x88, 0xff
 };
 
-using namespace net;
-//constexpr uint8_t transaction_id_size = 12;
-//static void check_transaction_id(const Stun& msg) {
-//	EXPECT_TRUE(msg.transact_id().size() == transaction_id_size);
-//	EXPECT_EQ(msg.transact_id(), test_transaction_id);
-//}
-//
 static void check_mapped_address(const Ipv4Address& address) {
-	static const Ipv4Address test_ipv4_address{
-		0xac1744e6,
-		0x9dfc
-	};
+	
 	EXPECT_EQ(address.ip, test_ipv4_address.ip);
 	EXPECT_EQ(address.port, test_ipv4_address.port);
 }
@@ -183,7 +184,93 @@ TEST(StunTests, ReadMsgWithUnknownAttribute) {
 TEST(StunTests, WriteMsgWithAddressAttribute) {
 	auto buffer = ByteNetworkWriter(stun_msg_with_mapped_address_ipv4.size());
 	auto msg = Stun();
+	msg.set_type(StunClass::SUCCESS_RESPONSE, StunMethod::BINDING);
+	msg.set_transaction_id(test_transaction_id);
 	auto attr = StunAttribute::create_attr_address(StunAttributeType::MAPPED_ADDRESS);
-	msg.set_type(StunClass::REQUEST, StunMethod::BINDING);
-	//EXPECT_EQ(0, std::memcmp(reinterpret_cast<const void*>(unknown_ptr->values().data()), expected.data(), expected.size()));
+	attr->set_port(test_ipv4_address.port);
+	attr->set_ip(test_ipv4_address.ip);
+	msg.add_attribute(std::move(attr));
+	msg.write_into(buffer);
+	EXPECT_EQ(0, 
+		std::memcmp(reinterpret_cast<const void*>(
+			buffer.data().data()), 
+			stun_msg_with_mapped_address_ipv4.data(), 
+			stun_msg_with_mapped_address_ipv4.size()
+		)
+	);
+}
+
+TEST(StunTests, WriteMsgWithXorAddressAttribute) {
+	auto buffer = ByteNetworkWriter(stun_msg_with_xor_mapped_address_ipv4.size());
+	auto msg = Stun();
+	msg.set_type(StunClass::SUCCESS_RESPONSE, StunMethod::BINDING);
+	msg.set_transaction_id(test_transaction_id);
+	auto attr = StunAttribute::create_attr_address_xor(StunAttributeType::XOR_MAPPED_ADDRESS);
+	attr->set_port(test_ipv4_address.port);
+	attr->set_ip(test_ipv4_address.ip);
+	msg.add_attribute(std::move(attr));
+	msg.write_into(buffer);
+	EXPECT_EQ(0,
+		std::memcmp(reinterpret_cast<const void*>(
+			buffer.data().data()),
+			stun_msg_with_xor_mapped_address_ipv4.data(),
+			stun_msg_with_xor_mapped_address_ipv4.size()
+		)
+	);
+}
+
+TEST(StunTests, WriteMsgWithStringAttribute) {
+	auto buffer = ByteNetworkWriter(stun_msg_with_username.size());
+	auto msg = Stun();
+	msg.set_type(StunClass::SUCCESS_RESPONSE, StunMethod::BINDING);
+	msg.set_transaction_id(test_transaction_id);
+	auto attr = StunAttribute::create_attr_string(StunAttributeType::USERNAME);
+	attr->set_string(test_username);
+	msg.add_attribute(std::move(attr));
+	msg.write_into(buffer);
+	EXPECT_EQ(0,
+		std::memcmp(reinterpret_cast<const void*>(
+			buffer.data().data()),
+			stun_msg_with_username.data(),
+			stun_msg_with_username.size()
+		)
+	);
+}
+
+TEST(StunTests, WriteMsgWithErrorAttribute) {
+	auto buffer = ByteNetworkWriter(stun_msg_with_error.size());
+	auto msg = Stun();
+	msg.set_type(StunClass::SUCCESS_RESPONSE, StunMethod::BINDING);
+	msg.set_transaction_id(test_transaction_id);
+	auto attr = StunAttribute::create_attr_error(StunAttributeType::ERROR_CODE);
+	attr->set_error(test_error_code, test_error_reason);
+	msg.add_attribute(std::move(attr));
+	msg.write_into(buffer);
+	EXPECT_EQ(0,
+		std::memcmp(reinterpret_cast<const void*>(
+			buffer.data().data()),
+			stun_msg_with_error.data(),
+			stun_msg_with_error.size()
+		)
+	);
+}
+
+TEST(StunTests, WriteMsgWithUnknownAttribute) {
+	auto buffer = ByteNetworkWriter(stun_msg_with_unknown_attribute.size());
+	auto msg = Stun();
+	msg.set_type(StunClass::SUCCESS_RESPONSE, StunMethod::BINDING);
+	msg.set_transaction_id(test_transaction_id);
+	auto attr = StunAttribute::create_attr_uint16_list(StunAttributeType::UNKNOWN_ATTRIBUTES);
+	for (const auto value : test_unknown_attribute_types) {
+		attr->add_value(value);
+	}
+	msg.add_attribute(std::move(attr));
+	msg.write_into(buffer);
+	EXPECT_EQ(0,
+		std::memcmp(reinterpret_cast<const void*>(
+			buffer.data().data()),
+			stun_msg_with_unknown_attribute.data(),
+			stun_msg_with_unknown_attribute.size()
+		)
+	);
 }

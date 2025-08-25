@@ -19,13 +19,13 @@ namespace net {
 	constexpr uint8_t SIZE_ATTR_MAPPED_ADDR = 8;
 	constexpr uint8_t SIZE_ATTR_CHANGE_REQUEST = 4;
 	constexpr uint8_t SIZE_STUN_HEADER = 20;
+	constexpr uint8_t SIZE_STUN_ATTR_HEADER = 4;
+	constexpr uint8_t SIZE_STUN_ATTR_ERROR_HEADER = 4;
 
 	template <std::derived_from<StunAttribute> T>
-	bool validate_attr_read(const T& attr, const ByteNetworkReader& reader) {
+	bool validate_attr_compatibility(const T& attr) {
 		auto type = attr.get_type();
-		auto length = attr.get_length();
 		bool compatibile = false;
-		bool enough_space = false;
 		if constexpr (std::is_same_v<T, StunAddressAttribute>) {
 			compatibile = (type == StunAttributeType::MAPPED_ADDRESS ||
 				type == StunAttributeType::DEPR_RESPONSE_ADDRESS ||
@@ -33,11 +33,9 @@ namespace net {
 				type == StunAttributeType::DEPR_CHANGED_ADDRESS ||
 				type == StunAttributeType::DEPR_REFLECTED_FROM ||
 				type == StunAttributeType::ALTERNATE_SERVER);
-			enough_space = reader.space() >= SIZE_ATTR_MAPPED_ADDR;
 		}
 		else if constexpr (std::is_same_v<T, StunXorAddressAttribute>) {
 			compatibile = (type == StunAttributeType::XOR_MAPPED_ADDRESS);
-			enough_space = reader.space() >= SIZE_ATTR_MAPPED_ADDR;
 		}
 		else if constexpr (std::is_same_v<T, StunStringAttribute>) {
 			compatibile = (type == StunAttributeType::USERNAME ||
@@ -45,58 +43,43 @@ namespace net {
 				type == StunAttributeType::REALM ||
 				type == StunAttributeType::NONCE ||
 				type == StunAttributeType::DEPR_PASSWORD);
-			enough_space = reader.space() >= length;
 		}
 		else if constexpr (std::is_same_v<T, StunErrorAttribute>) {
 			compatibile = (type == StunAttributeType::ERROR_CODE);
-			enough_space = reader.space() >= length;
 		}
 		else if constexpr (std::is_same_v<T, StunIntValueAttribute<T>>) {
 			compatibile = true;
-			enough_space = reader.space() >= sizeof(T);
 		}
 		else if constexpr (std::is_same_v<T, StunUInt16ListAttribute>) {
 			compatibile = (type == StunAttributeType::UNKNOWN_ATTRIBUTES);
-			enough_space = reader.space() >= length;
 		}
 		if (!compatibile) {
 			assert(compatibile && "Incompatibile attribute type");
-			return false;
-		}
-		if (!enough_space) {
-			assert(false && "Not enough space to read attribute from given buffer");
 			return false;
 		}
 		return true;
 	}
 
 	template <std::derived_from<StunAttribute> T>
-	bool validate_attr_write(const T& attr, const ByteNetworkWriter& writer) {
-		auto length = attr.get_length();
-		bool enough_space = false;
-		if constexpr (std::is_same_v<T, StunAddressAttribute>) {
-			enough_space = writer.space() >= SIZE_ATTR_MAPPED_ADDR;
-		}
-		else if constexpr (std::is_same_v<T, StunXorAddressAttribute>) {
-			enough_space = writer.space() >= SIZE_ATTR_MAPPED_ADDR;
-		}
-		else if constexpr (std::is_same_v<T, StunStringAttribute>) {
-			enough_space = writer.space() >= length;
-		}
-		else if constexpr (std::is_same_v<T, StunErrorAttribute>) {
-			enough_space = writer.space() >= length;
-		}
-		else if constexpr (std::is_same_v<T, StunIntValueAttribute<T>>) {
-			enough_space = writer.space() >= sizeof(T);
-		}
-		else if constexpr (std::is_same_v<T, StunUInt16ListAttribute>) {
-			enough_space = writer.space() >= length;
-		}
-		if (!enough_space) {
-			assert(false && "Not enough space to write attribute into given buffer");
+	bool validate_attr_read(const T& attr, const ByteNetworkReader& buffer) {
+		if (!validate_attr_compatibility(attr)) {
 			return false;
 		}
-		return true;
+		if (buffer.space() < attr.get_length()) {
+			assert(false && "Not enough space to read attribute from given buffer");
+			return false;
+		}
+	}
+
+	template <std::derived_from<StunAttribute> T>
+	bool validate_attr_write(const T& attr, const ByteNetworkWriter& buffer) {
+		if (!validate_attr_compatibility(attr)) {
+			return false;
+		}
+		if (buffer.space() < attr.get_length()) {
+			assert(false && "Not enough space to write attribute to given buffer");
+			return false;
+		}
 	}
 
 	std::unique_ptr<StunAddressAttribute> StunAttribute::create_attr_address(const StunAttributeType type) {
@@ -109,7 +92,7 @@ namespace net {
 		return std::make_unique<StunStringAttribute>(static_cast<uint16_t>(type), 0);
 	}
 	std::unique_ptr<StunErrorAttribute> StunAttribute::create_attr_error(const StunAttributeType type) {
-		return std::make_unique<StunErrorAttribute>(static_cast<uint16_t>(type), 2);
+		return std::make_unique<StunErrorAttribute>(static_cast<uint16_t>(type), SIZE_STUN_ATTR_ERROR_HEADER);
 	}
 	std::unique_ptr<StunUInt16ListAttribute> StunAttribute::create_attr_uint16_list(const StunAttributeType type) {
 		return std::make_unique<StunUInt16ListAttribute>(static_cast<uint16_t>(type), 0);
@@ -149,7 +132,7 @@ namespace net {
 		}
 		dst.write_numeric(STUN);
 		dst.write_numeric(IPv4);
-		dst.write_numeric(addr.port ^ (MAGIC_COOKIE >> 16));
+		dst.write_numeric<uint16_t>(addr.port ^ MAGIC_COOKIE >> 16);
 		return dst.write_numeric(addr.ip ^ MAGIC_COOKIE);
 	}
 
@@ -194,8 +177,11 @@ namespace net {
 		if (!validate_attr_write(*this, dst)) {
 			return false;
 		}
+		uint8_t hundreds = err_code / 100;
+		uint8_t rest = err_code - 100 * hundreds;
 		dst.write_numeric<uint16_t>(0x00);
-		dst.write_numeric(err_code);
+		dst.write_numeric(hundreds);
+		dst.write_numeric(rest);
 		return dst.write_bytes(std::span<const uint8_t>(reinterpret_cast<const uint8_t*>(err_reason.data()), err_reason.size()));
 	}
 
@@ -218,6 +204,12 @@ namespace net {
 		src.read_bytes(err_reason);
 		src.skip(padding);
 		return true;
+	}
+
+	void StunErrorAttribute::set_error(const uint16_t new_err_code, const std::string& new_reason) {
+		err_code = new_err_code;
+		err_reason = new_reason;
+		set_length(SIZE_STUN_ATTR_ERROR_HEADER + static_cast<uint16_t>(new_reason.size()));
 	}
 
 	bool StunUInt16ListAttribute::write_into(ByteNetworkWriter& dst) const {
@@ -294,6 +286,13 @@ namespace net {
 			attribute->write_into(dst);
 		}
 		return true;
+	}
+
+	void Stun::randomize_transaction_id() {
+		uint64_t t1 = rng::draw_random<uint64_t>(0, UINT64_MAX);
+		uint32_t t2 = rng::draw_random<uint32_t>(0, UINT32_MAX);
+		std::memcpy(transaction_id.data(), &t1, sizeof(t1));
+		std::memcpy(transaction_id.data() + sizeof(t1), &t2, sizeof(t2));
 	}
 
 	std::optional<Stun> Stun::read_from(ByteNetworkReader& src) {
@@ -391,6 +390,21 @@ namespace net {
 		default:
 			return nullptr;
 		}
+	}
+
+	bool Stun::add_attribute(std::unique_ptr<StunAttribute> attr) {
+		length += SIZE_STUN_ATTR_HEADER + attr->length + attr->padding;
+		attributes.emplace_back(std::move(attr));
+		return true;
+	}
+	bool Stun::remove_attribute(const StunAttributeType attr_type) {
+		for (auto attr_it = attributes.begin(); attr_it != attributes.end(); attr_it++) {
+			if ((*attr_it)->get_type() == attr_type) {
+				attributes.erase(attr_it);
+				return true;
+			}
+		}
+		return false;
 	}
 
 	std::unique_ptr<StunAttribute> Stun::create_attr(const uint16_t type, const uint16_t length) {
