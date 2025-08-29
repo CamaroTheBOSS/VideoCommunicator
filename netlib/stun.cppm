@@ -262,7 +262,7 @@ export namespace net {
 		void set_transaction_id(const std::span<const uint8_t, 12> new_transaction_id) { std::memcpy(&transaction_id, new_transaction_id.data(), new_transaction_id.size()); }
 		void randomize_transaction_id();
 
-		bool write_into(ByteNetworkWriter& dst);
+		uint64_t write_into(ByteNetworkWriter& dst);
 		static std::optional<Stun> read_from(ByteNetworkReader& src);
 		static std::unique_ptr<StunAttribute> create_attr(const uint16_t type, const uint16_t length);
 		template <std::integral T>
@@ -274,6 +274,8 @@ export namespace net {
 				return nullptr;
 			}
 		}
+		const std::vector<uint16_t>& get_unknown_attribute_types() const { return unknown_attributes; }
+		const std::vector<std::unique_ptr<StunAttribute>>& get_all_attributes() const { return attributes; }
 		const StunAddressAttribute* get_address_attribute(const StunAttributeType attr_type) const;
 		const StunXorAddressAttribute* get_xor_address_attribute(const StunAttributeType attr_type) const;
 		const StunStringAttribute* get_string_attribute(const StunAttributeType attr_type) const;
@@ -292,9 +294,40 @@ export namespace net {
 		uint16_t length = 0;							 // defines byte size of the StunMessage without 20 byte HEADER
 		std::array<uint8_t, 12> transaction_id;
 		std::vector<std::unique_ptr<StunAttribute>> attributes;
+		std::vector<uint16_t> unknown_attributes;
 
 		// Logical helper members
 		StunClass cls_type;
 		StunMethod method_type;
 	};
+
+	std::string stun_attr_type_to_str(const StunAttributeType type) {
+		switch (type) {
+		case StunAttributeType::ALTERNATE_SERVER: return "ALTERNATE_SERVER";
+		case StunAttributeType::ERROR_CODE: return "ERROR_CODE";
+		case StunAttributeType::MAPPED_ADDRESS: return "MAPPED_ADDRESS";
+		case StunAttributeType::XOR_MAPPED_ADDRESS: return "XOR_MAPPED_ADDRESS";
+		case StunAttributeType::MESSAGE_INTEGRITY: return "MESSAGE_INTEGRITY";
+		case StunAttributeType::NONCE: return "NONCE";
+		case StunAttributeType::REALM: return "REALM";
+		case StunAttributeType::SOFTWARE: return "SOFTWARE";
+		case StunAttributeType::UNKNOWN_ATTRIBUTES: return "UNKNOWN_ATTRIBUTES";
+		case StunAttributeType::USERNAME: return "USERNAME";
+		case StunAttributeType::FINGERPRINT: return "FINGERPRINT";
+		case StunAttributeType::MESSAGE_INTEGRITY_SHA256: return "MESSAGE_INTEGRITY_SHA256";
+		case StunAttributeType::PASSWORD_ALGORITHM: return "PASSWORD_ALGORITHM";
+		case StunAttributeType::USERHASH: return "USERHASH";
+		case StunAttributeType::DEPR_RESPONSE_ADDRESS: return "DEPR_RESPONSE_ADDRESS";
+		case StunAttributeType::DEPR_CHANGE_REQUEST: return "DEPR_CHANGE_REQUEST";
+		case StunAttributeType::DEPR_SOURCE_ADDRESS: return "DEPR_SOURCE_ADDRESS";
+		case StunAttributeType::DEPR_CHANGED_ADDRESS: return "DEPR_CHANGED_ADDRESS";
+		case StunAttributeType::DEPR_PASSWORD: return "DEPR_PASSWORD";
+		case StunAttributeType::DEPR_REFLECTED_FROM: return "DEPR_REFLECTED_FROM";
+		case StunAttributeType::ICE_PRIORITY: return "ICE_PRIORITY";
+		case StunAttributeType::ICE_USE_CANDIDATE: return "ICE_USE_CANDIDATE";
+		case StunAttributeType::ICE_CONTROLLED: return "ICE_CONTROLLED";
+		case StunAttributeType::ICE_CONTROLLING: return "ICE_CONTROLLING";
+		}
+		return std::format("UNKNOWN TYPE ({})", static_cast<uint16_t>(type));
+	}
 }

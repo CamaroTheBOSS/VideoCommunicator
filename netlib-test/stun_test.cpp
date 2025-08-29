@@ -78,6 +78,57 @@ constexpr std::array<uint8_t, 32>  stun_msg_with_unknown_attribute = {
   0x69, 0x96, 0x88, 0xff
 };
 
+constexpr std::array<uint8_t, 32>  stun_msg_incorrect_header = {
+  0xF1, 0x01, 0x00, 0x0c,   // incorrect type, length 12
+  0x21, 0x12, 0xa4, 0x42,   // magic cookie
+  0x29, 0x1f, 0xcd, 0x7c,   // transaction ID
+  0xba, 0x58, 0xab, 0xd7,
+  0xf2, 0x41, 0x01, 0x00,
+  0x00, 0x0a, 0x00, 0x08,  // Username, 16 byte length
+  0x88, 0x88, 0x87, 0x88,  // Unknown attributes
+  0x69, 0x96, 0x88, 0xff
+};
+
+constexpr std::array<uint8_t, 32>  stun_msg_incorrect_magic_cookie = {
+  0x01, 0x01, 0x00, 0x0c,   // binding response, length 12
+  0x21, 0x13, 0xa4, 0x42,   // incorrect magic cookie
+  0x29, 0x1f, 0xcd, 0x7c,   // transaction ID
+  0xba, 0x58, 0xab, 0xd7,
+  0xf2, 0x41, 0x01, 0x00,
+  0x00, 0x0a, 0x00, 0x08,  // Username, 16 byte length
+  0x88, 0x88, 0x87, 0x88,  // Unknown attributes
+  0x69, 0x96, 0x88, 0xff
+};
+
+constexpr std::array<uint8_t, 44> stun_msg_with_mapped_address_ipv4_and_username = {
+  0x01, 0x01, 0x00, 0x18,   // binding response, length 24
+  0x21, 0x12, 0xa4, 0x42,   // magic cookie
+  0x29, 0x1f, 0xcd, 0x7c,   // transaction ID
+  0xba, 0x58, 0xab, 0xd7,
+  0xf2, 0x41, 0x01, 0x00,
+  0x00, 0x01, 0x00, 0x08,  // Mapped, 8 byte length
+  0x00, 0x01, 0x9d, 0xfc,  // AF_INET, unxor-ed port
+  0xac, 0x17, 0x44, 0xe6,  // IPv4 address
+  0x00, 0x06, 0x00, 0x08,  // Username, 8 byte length
+  'u', 's', 'e', 'r',  // Username value
+  'n', 'a', 'm', 'e'
+};
+
+constexpr std::array<uint8_t, 44> stun_msg_with_unknown_attr_and_username = {
+  0x01, 0x01, 0x00, 0x18,   // binding response, length 24
+  0x21, 0x12, 0xa4, 0x42,   // magic cookie
+  0x29, 0x1f, 0xcd, 0x7c,   // transaction ID
+  0xba, 0x58, 0xab, 0xd7,
+  0xf2, 0x41, 0x01, 0x00,
+  0x80, 0x20, 0x00, 0x08,  // (unknown attr type), 8 byte length
+  0x00, 0x01, 0x9d, 0xfc,  // some data
+  0xac, 0x17, 0x44, 0xe6,  // some data
+  0x00, 0x06, 0x00, 0x08,  // Username, 8 byte length
+  'u', 's', 'e', 'r',  // Username value
+  'n', 'a', 'm', 'e'
+};
+
+
 static void check_mapped_address(const Ipv4Address& address) {
 	
 	EXPECT_EQ(address.ip, test_ipv4_address.ip);
@@ -138,7 +189,7 @@ TEST(StunTests, ReadMsgWithStringAttribute) {
 	if (username_ptr == nullptr) {
 		return;
 	}
-	EXPECT_EQ(username_ptr->str(), "username");
+	EXPECT_EQ(username_ptr->str(), test_username);
 }
 
 TEST(StunTests, ReadMsgWithErrorAttribute) {
@@ -157,8 +208,8 @@ TEST(StunTests, ReadMsgWithErrorAttribute) {
 	if (error_ptr == nullptr) {
 		return;
 	}
-	EXPECT_EQ(error_ptr->code(), 404);
-	EXPECT_EQ(error_ptr->reason(), "not found");
+	EXPECT_EQ(error_ptr->code(), test_error_code);
+	EXPECT_EQ(error_ptr->reason(), test_error_reason);
 }
 
 TEST(StunTests, ReadMsgWithUnknownAttribute) {
@@ -179,6 +230,67 @@ TEST(StunTests, ReadMsgWithUnknownAttribute) {
 	}
 	std::vector<uint16_t> expected = { 0x8888, 0x8788, 0x6996, 0x88ff };
 	EXPECT_EQ(0, std::memcmp(reinterpret_cast<const void*>(unknown_ptr->values().data()), expected.data(), expected.size()));
+}
+
+TEST(StunTests, ReadMsgWithIpAndUsernameAttributes) {
+	auto buffer = ByteNetworkReader(stun_msg_with_mapped_address_ipv4_and_username);
+	auto msg_opt = Stun::read_from(buffer);
+	EXPECT_TRUE(msg_opt.has_value());
+	if (!msg_opt.has_value()) {
+		return;
+	}
+	auto& msg = msg_opt.value();
+	EXPECT_TRUE(msg.cls() == StunClass::SUCCESS_RESPONSE);
+	EXPECT_TRUE(msg.method() == StunMethod::BINDING);
+	EXPECT_EQ(0, std::memcmp(reinterpret_cast<const void*>(msg.transact_id().data()), &test_transaction_id, test_transaction_id.size()));
+	auto address_attr_ptr = msg.get_address_attribute(StunAttributeType::MAPPED_ADDRESS);
+	auto username_attr_ptr = msg.get_string_attribute(StunAttributeType::USERNAME);
+	EXPECT_FALSE(address_attr_ptr == nullptr);
+	EXPECT_FALSE(username_attr_ptr == nullptr);
+	if (!address_attr_ptr || !username_attr_ptr) {
+		return;
+	}
+	check_mapped_address(address_attr_ptr->address());
+	EXPECT_EQ(username_attr_ptr->str(), test_username);
+}
+
+TEST(StunTests, ReadMsgWithUnknownAttributeType) {
+	auto buffer = ByteNetworkReader(stun_msg_with_unknown_attr_and_username);
+	auto msg_opt = Stun::read_from(buffer);
+	EXPECT_TRUE(msg_opt.has_value());
+	if (!msg_opt.has_value()) {
+		return;
+	}
+	auto& msg = msg_opt.value();
+	EXPECT_TRUE(msg.cls() == StunClass::SUCCESS_RESPONSE);
+	EXPECT_TRUE(msg.method() == StunMethod::BINDING);
+	EXPECT_EQ(0, std::memcmp(reinterpret_cast<const void*>(msg.transact_id().data()), &test_transaction_id, test_transaction_id.size()));
+	auto username_ptr = msg.get_string_attribute(StunAttributeType::USERNAME);
+	EXPECT_FALSE(username_ptr == nullptr);
+	if (username_ptr == nullptr) {
+		return;
+	}
+	EXPECT_EQ(username_ptr->str(), test_username);
+	std::vector<uint16_t> expected_unknown_attribute_types = { 0x8020 };
+	EXPECT_EQ(0,
+		std::memcmp(reinterpret_cast<const void*>(
+			msg.get_unknown_attribute_types().data()),
+			expected_unknown_attribute_types.data(),
+			msg.get_unknown_attribute_types().size()
+		)
+	);
+}
+
+TEST(StunTests, ReadMsgWithIncorrectHeader) {
+	auto buffer = ByteNetworkReader(stun_msg_incorrect_header);
+	auto msg_opt = Stun::read_from(buffer);
+	EXPECT_FALSE(msg_opt.has_value());
+}
+
+TEST(StunTests, ReadMsgWithIncorrectMagicCookie) {
+	auto buffer = ByteNetworkReader(stun_msg_incorrect_magic_cookie);
+	auto msg_opt = Stun::read_from(buffer);
+	EXPECT_FALSE(msg_opt.has_value());
 }
 
 TEST(StunTests, WriteMsgWithAddressAttribute) {
@@ -271,6 +383,28 @@ TEST(StunTests, WriteMsgWithUnknownAttribute) {
 			buffer.data().data()),
 			stun_msg_with_unknown_attribute.data(),
 			stun_msg_with_unknown_attribute.size()
+		)
+	);
+}
+
+TEST(StunTests, WriteMsgWithIpAndUsernameAttributes) {
+	auto buffer = ByteNetworkWriter(stun_msg_with_mapped_address_ipv4_and_username.size());
+	auto msg = Stun();
+	msg.set_type(StunClass::SUCCESS_RESPONSE, StunMethod::BINDING);
+	msg.set_transaction_id(test_transaction_id);
+	auto attr_addr = StunAttribute::create_attr_address(StunAttributeType::MAPPED_ADDRESS);
+	attr_addr->set_port(test_ipv4_address.port);
+	attr_addr->set_ip(test_ipv4_address.ip);
+	msg.add_attribute(std::move(attr_addr));
+	auto attr_username = StunAttribute::create_attr_string(StunAttributeType::USERNAME);
+	attr_username->set_string(test_username);
+	msg.add_attribute(std::move(attr_username));
+	msg.write_into(buffer);
+	EXPECT_EQ(0,
+		std::memcmp(reinterpret_cast<const void*>(
+			buffer.data().data()),
+			stun_msg_with_mapped_address_ipv4_and_username.data(),
+			stun_msg_with_mapped_address_ipv4_and_username.size()
 		)
 	);
 }

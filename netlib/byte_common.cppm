@@ -66,6 +66,7 @@ export namespace net {
 			return true;
 		}
 		const std::span<const uint8_t> data() const { return bytes; }
+		void reset() { pointer = 0; }
 
 		template <std::integral T>
 		bool read_numeric(T* value) {
@@ -120,6 +121,8 @@ export namespace net {
 		uint64_t offset() const { return pointer; }
 		uint64_t space() const { return size() - offset(); }
 		const std::vector<uint8_t>& data() const { return bytes; }
+		void reset() { pointer = 0; }
+		void reset(const uint64_t new_pos) { pointer = (std::min)((std::max)(static_cast<uint64_t>(0), new_pos), size()); }
 
 		template <std::integral T>
 		bool write_numeric(T value) {

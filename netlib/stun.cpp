@@ -69,6 +69,7 @@ namespace net {
 			assert(false && "Not enough space to read attribute from given buffer");
 			return false;
 		}
+		return true;
 	}
 
 	template <std::derived_from<StunAttribute> T>
@@ -80,6 +81,7 @@ namespace net {
 			assert(false && "Not enough space to write attribute to given buffer");
 			return false;
 		}
+		return true;
 	}
 
 	std::unique_ptr<StunAddressAttribute> StunAttribute::create_attr_address(const StunAttributeType type) {
@@ -271,21 +273,43 @@ namespace net {
 		return true;
 	}
 
-	bool Stun::write_into(ByteNetworkWriter& dst) {
+	uint64_t Stun::write_into(ByteNetworkWriter& dst) {
 		if (dst.space() < SIZE_STUN_HEADER + length) {
 			assert(false && "No space in dst buffer to write this stun message");
-			return false;
+			return 0;
 		}
-		dst.write_numeric(type);
-		dst.write_numeric(length);
-		dst.write_numeric(MAGIC_COOKIE);
-		dst.write_bytes(transaction_id);
+		uint64_t start_pos = dst.offset();
+		if (!dst.write_numeric(type)) {
+			dst.reset(start_pos);
+			return 0;
+		}
+		if (!dst.write_numeric(length)) {
+			dst.reset(start_pos);
+			return 0;
+		}
+		if (!dst.write_numeric(MAGIC_COOKIE)) {
+			dst.reset(start_pos);
+			return 0;
+		}
+		if (!dst.write_bytes(transaction_id)) {
+			dst.reset(start_pos);
+			return 0;
+		}
 		for (const auto& attribute : attributes) {
-			dst.write_numeric(attribute->type);
-			dst.write_numeric(attribute->length);
-			attribute->write_into(dst);
+			if (!dst.write_numeric(attribute->type)) {
+				dst.reset(start_pos);
+				return 0;
+			}
+			if (!dst.write_numeric(attribute->length)) {
+				dst.reset(start_pos);
+				return 0;
+			}
+			if (!attribute->write_into(dst)) {
+				dst.reset(start_pos);
+				return 0;
+			}
 		}
-		return true;
+		return dst.offset() - start_pos;
 	}
 
 	void Stun::randomize_transaction_id() {
@@ -329,8 +353,13 @@ namespace net {
 			src.read_numeric(&attr_length);
 			auto attribute = create_attr(attr_type, attr_length);
 			if (!attribute) {
-				assert(false && "Invalid attribute type");
-				return {};
+				// Unknown attributes put into separated structure and skip it
+				msg.unknown_attributes.push_back(attr_type);
+				if (attr_length % 4 != 0) {
+					attr_length += attr_length % 4;
+				}
+				src.skip(attr_length);
+				continue;
 			}
 			if (!attribute->read_from(src)) {
 				return {};
@@ -350,6 +379,7 @@ namespace net {
 		case StunAttributeType::DEPR_REFLECTED_FROM:
 			return static_cast<const StunAddressAttribute*>(get_attribute(attr_type));
 		default:
+			assert(false && "Incompatible attribute");
 			return nullptr;
 		}
 	}
@@ -359,6 +389,7 @@ namespace net {
 		case StunAttributeType::XOR_MAPPED_ADDRESS:
 			return static_cast<const StunXorAddressAttribute*>(get_attribute(attr_type));
 		default:
+			assert(false && "Incompatible attribute");
 			return nullptr;
 		}
 	}
@@ -371,6 +402,7 @@ namespace net {
 		case StunAttributeType::DEPR_PASSWORD:
 			return static_cast<const StunStringAttribute*>(get_attribute(attr_type));
 		default:
+			assert(false && "Incompatible attribute");
 			return nullptr;
 		}
 	}
@@ -380,6 +412,7 @@ namespace net {
 		case StunAttributeType::ERROR_CODE:
 			return static_cast<const StunErrorAttribute*>(get_attribute(attr_type));
 		default:
+			assert(false && "Incompatible attribute");
 			return nullptr;
 		}
 	}
@@ -388,6 +421,7 @@ namespace net {
 		case StunAttributeType::UNKNOWN_ATTRIBUTES:
 			return static_cast<const StunUInt16ListAttribute*>(get_attribute(attr_type));
 		default:
+			assert(false && "Incompatible attribute");
 			return nullptr;
 		}
 	}
@@ -442,6 +476,7 @@ namespace net {
 				return attr.get();
 			}
 		}
+		assert(false && "Attribute not found");
 		return nullptr;
 	}
 }

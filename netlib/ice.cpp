@@ -42,8 +42,75 @@ namespace net {
 		return candidates;
 	}
 
+	static bool handle_address_attribute(const Stun& msg, const StunAttributeType type) {
+		auto attr_addr_mapped = msg.get_address_attribute(type);
+		if (attr_addr_mapped) {
+			return false;
+		}
+		auto& addr = attr_addr_mapped->address();
+		log_info(std::format("Got {} attribute: ip: {} port: {}", stun_attr_type_to_str(type), udp_ipv4_net_to_str(addr.ip), addr.port));
+		return true;
+	}
+
+	static bool handle_address_attribute(const Stun& msg, const StunAttributeType type, std::vector<Ipv4Address>& candidates) {
+		auto attr_addr_mapped = msg.get_address_attribute(type);
+		if (attr_addr_mapped) {
+			return false;
+		}
+		auto& addr = attr_addr_mapped->address();
+		log_info(std::format("Got {} attribute: ip: {} port: {}", stun_attr_type_to_str(type), udp_ipv4_net_to_str(addr.ip), addr.port));
+		candidates.emplace_back(addr);
+		return true;
+	}
+
+	static bool handle_xor_address_attribute(const Stun& msg, const StunAttributeType type, std::vector<Ipv4Address>& candidates) {
+		auto attr_addr_mapped = msg.get_xor_address_attribute(type);
+		if (attr_addr_mapped) {
+			return false;
+		}
+		auto& addr = attr_addr_mapped->address();
+		log_info(std::format("Got {} attribute: ip: {} port: {}", stun_attr_type_to_str(type), udp_ipv4_net_to_str(addr.ip), addr.port));
+		candidates.emplace_back(addr);
+		return true;
+	}
+
+	static bool handle_string_attribute(const Stun& msg, const StunAttributeType type) {
+		auto attr_string = msg.get_string_attribute(type);
+		if (attr_string) {
+			return false;
+		}
+		auto& text = attr_string->str();
+		log_info(std::format("Got {} attribute: value: {}", stun_attr_type_to_str(type), text));
+		return true;
+	}
+
+	static bool handle_error_attribute(const Stun& msg, const StunAttributeType type) {
+		auto attr = msg.get_error_attribute(type);
+		if (attr) {
+			return false;
+		}
+		auto code = attr->code();
+		auto& reason = attr->reason();
+		log_info(std::format("Got {} attribute (code={}, reason={})", stun_attr_type_to_str(type), code, reason));
+		return true;
+	}
+
+	static bool handle_unknown_attribute(const Stun& msg, const StunAttributeType type) {
+		auto attr = msg.get_uint16_list_attribute(type);
+		if (attr) {
+			return false;
+		}
+		std::string msg_str = "[";
+		for (const auto val : attr->values()) {
+			msg_str += std::to_string(val) + ", ";
+		}
+		msg_str += "]";
+		log_info(std::format("Got {} attribute, values: ", stun_attr_type_to_str(type), msg_str));
+		return true;
+	}
+
 	std::vector<Ipv4Address> ice_discover_server_candidates() {
-		/*constexpr const char* stun_servers[7] = {
+		constexpr const char* stun_servers[7] = {
 			"stun.12connect.com",
 			"stun.12voip.com",
 			"stun.1und1.de",
@@ -56,8 +123,7 @@ namespace net {
 
 		Stun request{};
 		request.set_type(StunClass::REQUEST, StunMethod::BINDING);
-		std::array<uint8_t, 92> buffer{};
-		auto spn = std::span<uint8_t>(buffer);
+		auto buffer = ByteNetworkWriter(92);
 		Ipv4Address address{};
 		address.port = 3478;
 
@@ -68,11 +134,16 @@ namespace net {
 				continue;
 			}
 			for (const auto& ip : ips) {
+				buffer.reset();
 				auto connection = udp_ipv4_init_socket();
 				request.clear_transaction_id();
-				auto size = request.write_into(spn);
+				uint64_t size = request.write_into(buffer);
+				if (size == 0) {
+					log_error("Cannot serialize stun message into buffer");
+					continue;
+				}
 				address.ip = udp_ipv4_str_to_net(ip);
-				auto send_bytes = udp_ipv4_send_packet(connection, reinterpret_cast<void*>(&buffer), size, address);
+				auto send_bytes = udp_ipv4_send_packet(connection, reinterpret_cast<const void*>(buffer.data().data()), size, address);
 				if (send_bytes <= 0) {
 					closesocket(connection);
 					continue;
@@ -80,9 +151,9 @@ namespace net {
 				log_info(std::format("Sending to server '{}' with ip '{}' successful.", server, ip));
 				FD_SET(connection, &connections);
 			}
-		}*/
+		}
 
-		/*timeval timeout{ .tv_usec = 1'000'000 };
+		timeval timeout{ .tv_usec = 1'000'000 };
 		while (connections.fd_count > 0) {
 			FD_SET listen_connections = connections;
 			int socket_count = select(0, &listen_connections, nullptr, nullptr, &timeout);
@@ -104,10 +175,13 @@ namespace net {
 					FD_CLR(connection, &connections);
 					continue;
 				}
-
-				auto recv_msg = Stun::read_from(std::span<uint8_t>(buff_vec.data(), recv_bytes));
-				auto msg_class = recv_msg.cls();
-				auto msg_method = recv_msg.method();
+				auto buff_reader = ByteNetworkReader(std::span<uint8_t>(buff_vec.data(), recv_bytes));
+				auto recv_msg = Stun::read_from(buff_reader);
+				if (!recv_msg.has_value()) {
+					continue;
+				}
+				auto msg_class = recv_msg->cls();
+				auto msg_method = recv_msg->method();
 				auto ip_str = udp_ipv4_net_to_str(recv_server_address.ip);
 				if (msg_method == StunMethod::BINDING && msg_class == StunClass::SUCCESS_RESPONSE) {
 					log_info(std::format("Successful stun request to ip '{}'", ip_str));
@@ -118,95 +192,89 @@ namespace net {
 						ip_str, static_cast<uint16_t>(msg_method), static_cast<uint8_t>(msg_class))
 					);
 					continue;
-				}*/
-				//Ipv4Address addr;
-				//for (const auto& attribute : recv_msg.get_attributes()) {
-				//	//auto type = attribute.get_type();
-				//	//switch (type) {
-				//	//case StunAttributeType::ALTERNATE_SERVER:
-				//	//	log_info(std::format("Got ALTERNATE_SERVER attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::ERROR_CODE:
-				//	//	log_info(std::format("Got ERROR_CODE attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::MAPPED_ADDRESS:
-				//	//	//addr = attribute.parse_mapped_address();
-				//	//	//log_info(std::format("Got MAPPED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
-				//	//	//candidates.emplace_back(std::move(addr));
-				//	//	continue;
-				//	//case StunAttributeType::XOR_MAPPED_ADDRESS:
-				//	//	//addr = attribute.parse_xor_mapped_address();
-				//	//	//log_info(std::format("Got XOR_MAPPED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
-				//	//	continue;
-				//	//case StunAttributeType::MESSAGE_INTEGRITY:
-				//	//	log_info(std::format("Got MESSAGE_INTEGRITY attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::NONCE:
-				//	//	log_info(std::format("Got NONCE attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::REALM:
-				//	//	log_info(std::format("Got REAL attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::SOFTWARE:
-				//	//	//log_info(std::format("Got SOFTWARE attribute: {}", attribute.parse_string()));
-				//	//	continue;
-				//	//case StunAttributeType::UNKNOWN_ATTRIBUTES:
-				//	//	log_info(std::format("Got UNKNOWN_ATTRIBUTES attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::USERNAME:
-				//	//	//log_info(std::format("Got USERNAME attribute: {}", attribute.parse_string()));
-				//	//	continue;
-				//	//case StunAttributeType::FINGERPRINT:
-				//	//	log_info(std::format("Got FINGERPRINT attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::MESSAGE_INTEGRITY_SHA256:
-				//	//	log_info(std::format("Got MESSAGE_INTEGRITY_SHA256 attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::PASSWORD_ALGORITHM:
-				//	//	log_info(std::format("Got PASSWORD_ALGORITHM attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::USERHASH:
-				//	//	log_info(std::format("Got USERHASH attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::DEPR_RESPONSE_ADDRESS:
-				//	//	log_info(std::format("Got DEPR_RESPONSE_ADDRESS attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::DEPR_CHANGE_REQUEST:
-				//	//	log_info(std::format("Got DEPR_CHANGE_REQUEST attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::DEPR_SOURCE_ADDRESS:
-				//	//	//addr = attribute.parse_mapped_address();
-				//	//	//log_info(std::format("Got DEPR_SOURCE_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
-				//	//	continue;
-				//	//case StunAttributeType::DEPR_CHANGED_ADDRESS:
-				//	//	//addr = attribute.parse_mapped_address();
-				//	//	//log_info(std::format("Got DEPR_CHANGED_ADDRESS attribute: ip: {} port: {}", udp_ipv4_net_to_str(addr.ip), addr.port));
-				//	//	continue;
-				//	//case StunAttributeType::DEPR_PASSWORD:
-				//	//	log_info(std::format("Got DEPR_PASSWORD attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::DEPR_REFLECTED_FROM:
-				//	//	log_info(std::format("Got DEPR_REFLECTED_FROM attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::ICE_PRIORITY:
-				//	//	log_info(std::format("Got PRIORITY attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::ICE_USE_CANDIDATE:
-				//	//	log_info(std::format("Got USE_CANDIDATE attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::ICE_CONTROLLED:
-				//	//	log_info(std::format("Got ICE_CONTROLLED attribute: {}", 0));
-				//	//	continue;
-				//	//case StunAttributeType::ICE_CONTROLLING:
-				//	//	log_info(std::format("Got ICE_CONTROLLING attribute: {}", 0));
-				//	//	continue;
-				//	//default:
-				//	//	//log_error(std::format("Unknown attribute type: {}", static_cast<uint16_t>(attribute.get_type())));
-				//	//}
-				//}
-			//}
-		//}
-		//return candidates;
+				}
+				for (const auto& attribute : recv_msg->get_all_attributes()) {
+					auto type = attribute->get_type();
+					switch (type) {
+					case StunAttributeType::ALTERNATE_SERVER:
+						handle_address_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::ERROR_CODE:
+						handle_error_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::MAPPED_ADDRESS:
+						handle_address_attribute(recv_msg.value(), type, candidates);
+						continue;
+					case StunAttributeType::XOR_MAPPED_ADDRESS:
+						handle_address_attribute(recv_msg.value(), type, candidates);
+						continue;
+					case StunAttributeType::MESSAGE_INTEGRITY:
+						handle_string_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::NONCE:
+						handle_string_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::REALM:
+						handle_string_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::SOFTWARE:
+						handle_string_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::UNKNOWN_ATTRIBUTES:
+						handle_unknown_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::USERNAME:
+						handle_string_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::FINGERPRINT:
+						log_info(std::format("Got FINGERPRINT attribute: {}", 0));
+						continue;
+					case StunAttributeType::MESSAGE_INTEGRITY_SHA256:
+						log_info(std::format("Got MESSAGE_INTEGRITY_SHA256 attribute: {}", 0));
+						continue;
+					case StunAttributeType::PASSWORD_ALGORITHM:
+						log_info(std::format("Got PASSWORD_ALGORITHM attribute: {}", 0));
+						continue;
+					case StunAttributeType::USERHASH:
+						log_info(std::format("Got USERHASH attribute: {}", 0));
+						continue;
+					case StunAttributeType::DEPR_RESPONSE_ADDRESS:
+						handle_address_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::DEPR_CHANGE_REQUEST:
+						log_info(std::format("Got DEPR_CHANGE_REQUEST attribute: {}", 0));
+						continue;
+					case StunAttributeType::DEPR_SOURCE_ADDRESS:
+						handle_address_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::DEPR_CHANGED_ADDRESS:
+						handle_address_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::DEPR_PASSWORD:
+						handle_string_attribute(recv_msg.value(), type);
+						continue;
+					case StunAttributeType::DEPR_REFLECTED_FROM:
+						log_info(std::format("Got DEPR_REFLECTED_FROM attribute: {}", 0));
+						continue;
+					case StunAttributeType::ICE_PRIORITY:
+						log_info(std::format("Got PRIORITY attribute: {}", 0));
+						continue;
+					case StunAttributeType::ICE_USE_CANDIDATE:
+						log_info(std::format("Got USE_CANDIDATE attribute: {}", 0));
+						continue;
+					case StunAttributeType::ICE_CONTROLLED:
+						log_info(std::format("Got ICE_CONTROLLED attribute: {}", 0));
+						continue;
+					case StunAttributeType::ICE_CONTROLLING:
+						log_info(std::format("Got ICE_CONTROLLING attribute: {}", 0));
+						continue;
+					default:
+						log_error(std::format("Unknown attribute type: {}", attribute->get_type_raw()));
+					}
+				}
+			}
+		}
+		return candidates;
 		return {};
 	}
 }
