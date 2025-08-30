@@ -44,7 +44,7 @@ namespace net {
 
 	static bool handle_address_attribute(const Stun& msg, const StunAttributeType type) {
 		auto attr_addr_mapped = msg.get_address_attribute(type);
-		if (attr_addr_mapped) {
+		if (!attr_addr_mapped) {
 			return false;
 		}
 		auto& addr = attr_addr_mapped->address();
@@ -54,7 +54,7 @@ namespace net {
 
 	static bool handle_address_attribute(const Stun& msg, const StunAttributeType type, std::vector<Ipv4Address>& candidates) {
 		auto attr_addr_mapped = msg.get_address_attribute(type);
-		if (attr_addr_mapped) {
+		if (!attr_addr_mapped) {
 			return false;
 		}
 		auto& addr = attr_addr_mapped->address();
@@ -65,7 +65,7 @@ namespace net {
 
 	static bool handle_xor_address_attribute(const Stun& msg, const StunAttributeType type, std::vector<Ipv4Address>& candidates) {
 		auto attr_addr_mapped = msg.get_xor_address_attribute(type);
-		if (attr_addr_mapped) {
+		if (!attr_addr_mapped) {
 			return false;
 		}
 		auto& addr = attr_addr_mapped->address();
@@ -76,7 +76,7 @@ namespace net {
 
 	static bool handle_string_attribute(const Stun& msg, const StunAttributeType type) {
 		auto attr_string = msg.get_string_attribute(type);
-		if (attr_string) {
+		if (!attr_string) {
 			return false;
 		}
 		auto& text = attr_string->str();
@@ -86,7 +86,7 @@ namespace net {
 
 	static bool handle_error_attribute(const Stun& msg, const StunAttributeType type) {
 		auto attr = msg.get_error_attribute(type);
-		if (attr) {
+		if (!attr) {
 			return false;
 		}
 		auto code = attr->code();
@@ -97,7 +97,7 @@ namespace net {
 
 	static bool handle_unknown_attribute(const Stun& msg, const StunAttributeType type) {
 		auto attr = msg.get_uint16_list_attribute(type);
-		if (attr) {
+		if (!attr) {
 			return false;
 		}
 		std::string msg_str = "[";
@@ -206,7 +206,7 @@ namespace net {
 						handle_address_attribute(recv_msg.value(), type, candidates);
 						continue;
 					case StunAttributeType::XOR_MAPPED_ADDRESS:
-						handle_address_attribute(recv_msg.value(), type, candidates);
+						handle_xor_address_attribute(recv_msg.value(), type, candidates);
 						continue;
 					case StunAttributeType::MESSAGE_INTEGRITY:
 						handle_string_attribute(recv_msg.value(), type);
@@ -271,6 +271,9 @@ namespace net {
 					default:
 						log_error(std::format("Unknown attribute type: {}", attribute->get_type_raw()));
 					}
+				}
+				for (const auto attr_type : recv_msg->get_unknown_attribute_types()) {
+					log_warning(std::format("Unknown attribute type: {}", attr_type));
 				}
 			}
 		}
